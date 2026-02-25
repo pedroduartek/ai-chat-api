@@ -1,0 +1,10 @@
+{
+    # Global options — set an admin email if you'd like automatic TLS notifications
+    # email you@example.com
+}
+
+# Route the API domain to the internal `api` service. Caddy will handle TLS automatically
+# if the domain resolves to this VPS and ports 80/443 are open.
+api.pedroduartek.com {
+        reverse_proxy api:80
+}

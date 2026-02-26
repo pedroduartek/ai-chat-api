@@ -7,23 +7,22 @@ namespace Api.Services;
 public class ChatService : IChatService
 {
     private readonly IHttpClientFactory _clientFactory;
-    private readonly IConfiguration _config;
+    private readonly ChatOptions _options;
 
-    public ChatService(IHttpClientFactory clientFactory, IConfiguration config)
+    public ChatService(IHttpClientFactory clientFactory, Microsoft.Extensions.Options.IOptions<ChatOptions> options)
     {
         _clientFactory = clientFactory;
-        _config = config;
+        _options = options?.Value ?? new ChatOptions();
     }
 
     public async Task<string> GenerateAnswerAsync(string message)
     {
-        var client = _clientFactory.CreateClient("ollama");
-        var model = _config["OLLAMA_MODEL"] ?? "small-llama";
-        var promptToSend = "Reply to the question shortly:" + "\n\n" + message;
-        var payload = new { model, prompt = promptToSend };
-        var resp = await client.PostAsJsonAsync("/api/generate", payload);
-        var content = await resp.Content.ReadAsStringAsync();
+        string answer = await SendMessage(message);
+        return FormatAnswer(answer);
+    }
 
+    private static string FormatAnswer(string content)
+    {
         string finalAnswer = content;
         try
         {
@@ -64,5 +63,16 @@ public class ChatService : IChatService
         }
 
         return finalAnswer;
+    }
+
+    private async Task<string> SendMessage(string message)
+    {
+        var client = _clientFactory.CreateClient(_options.ClientName);
+        var model = _options.ModelDefault;
+        var promptToSend = _options.PromptPrefix + "\n\n" + message;
+        var payload = new { model, prompt = promptToSend };
+        var resp = await client.PostAsJsonAsync(_options.GenerateEndpoint, payload);
+        var content = await resp.Content.ReadAsStringAsync();
+        return content;
     }
 }

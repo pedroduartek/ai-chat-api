@@ -23,8 +23,14 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/var/lib/ollama
+      - ollama_data:/root/.ollama
     environment:
       - OLLAMA_ALLOW_PRE_RELEASE=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   ollama_data:

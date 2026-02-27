@@ -19,10 +19,19 @@ services:
     image: ollama/ollama:latest
     restart: unless-stopped
     # IMPORTANT: do NOT publish Ollama's port in production — internal only
+    # Mount the persistent volume to the container path(s) Ollama may use for models.
+    # Some images use /var/lib/ollama, others use /root/.ollama — mounting to both
+    # ensures persisted models survive restarts regardless of internal path.
     volumes:
       - ollama_data:/var/lib/ollama
+      - ollama_data:/root/.ollama
     environment:
       - OLLAMA_ALLOW_PRE_RELEASE=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
     networks:
       - internal
 
@@ -38,6 +47,9 @@ services:
       - caddy_config:/config
     networks:
       - internal
+
+  # Note: keep Caddy publicly exposed on 80/443 only. Optionally add a simple
+  # healthcheck if your environment requires it.
 
 volumes:
   ollama_data:

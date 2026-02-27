@@ -16,10 +16,7 @@ KNOWLEDGE BASE
 - Home lab: Self-hosted Home Assistant environment with 50+ Zigbee devices; experiments with automation reliability and event-driven thinking.
 For more information about Pedro Duarte go to: https://pedroduartek.com/about
 
-[LOCATION]
-- Lisbon, Portugal
-
-[EDUCATION]
+[EDUCATION as a Studant]
 1) Polytechnic Institute of Setúbal
    - Degree: Bachelor's Degree in Management Information Systems
    - Dates: Sep 2017 – Jun 2020
@@ -97,7 +94,7 @@ Role: Software Engineer
 Aug 2021 - Apr 2022
 Location: Lisbon, Portugal
 
-Comapny: Closer Consulting
+Company: Closer Consulting
 Tech Stack: .NET MVC Razor SQL Server 
 Role:Junior Software Engineer
 Sep 2020 - Aug 2021
@@ -105,6 +102,8 @@ Location: Lisbon, Portugal
 
 Role:Intern Software Engineer
 Jun 2020 - Sep 2020
+
+Worked in 3 companies over the timespan of 6 years.
 
 For more information about Professional Experience go to: https://pedroduartek.com/experience
 

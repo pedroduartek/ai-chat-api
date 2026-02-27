@@ -8,6 +8,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
+// Configure CORS to allow the frontend origin for browser requests
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: "AllowFrontend",
+        policy =>
+        {
+            policy.WithOrigins("https://pedroduartek.com", "https://www.pedroduartek.com")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+});
 var config = builder.Configuration;
 var chatSection = config.GetSection("Chat");
 var chatOptsPre = chatSection.Get<ChatOptions>() ?? new ChatOptions();
@@ -36,6 +48,9 @@ var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
+// Enable CORS for the configured frontend origins
+app.UseCors("AllowFrontend");
 
 app.MapControllers();
 

@@ -76,19 +76,10 @@ ai-chat-api/
 └── docs/                # project docs (includes a generated project doc)
 ```
 
-## ⚙️ Configuration
-
-Set provider keys and runtime options via environment variables, e.g.:
-
-```
-OPENAI_API_KEY=your_provider_api_key
-ASPNETCORE_ENVIRONMENT=Development
-```
-
 ## 🤝 Contributing
 
 PRs welcome. Open an issue first for major changes or roadmap discussion.
 
 ## 📄 License
 
-Private (add a `LICENSE` file to specify otherwise)
+Private

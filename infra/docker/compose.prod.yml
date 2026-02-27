@@ -3,9 +3,13 @@ version: "3.8"
 # Production docker-compose for a single VPS. Exposes only ports 80 and 443 via Caddy.
 # Place your `.env` file in this directory on the VPS (see .env.example).
 
+
 services:
   api:
-    image: ai-chat-api:latest
+    build:
+      context: ../..                      # /opt/pedro-chat
+      dockerfile: apps/chat-api/Dockerfile
+    image: ai-chat-api:local
     restart: unless-stopped
     env_file: .env
     environment:
@@ -14,6 +18,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL}
     networks:
       - internal
+
 
   ollama:
     image: ollama/ollama:latest

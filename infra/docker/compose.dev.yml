@@ -1,5 +1,4 @@
-version: "3.8"
-# Development compose with Ollama (dev may expose Ollama port to host for convenience)
+ # Development compose with Ollama (dev may expose Ollama port to host for convenience)
 
 services:
   api:

@@ -42,36 +42,13 @@ while true; do
     printf "\n"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - Branch $BRANCH is behind origin/$BRANCH by $behind commit(s) — running deploy"
     if [ -f "$REPO_DIR/deploy.sh" ]; then
-      # Use a pidfile to detect and wait for an existing deploy, or start one and wait for it.
-      PIDFILE="$REPO_DIR/.deploy.pid"
-      if [ -f "$PIDFILE" ]; then
-        existing_pid=$(cat "$PIDFILE" 2>/dev/null || echo "")
-      else
-        existing_pid=""
-      fi
-
-      if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
-        echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy already running (pid $existing_pid), waiting for it to finish"
-        while kill -0 "$existing_pid" 2>/dev/null; do
-          sleep 5
-        done
-        echo "$(date +'%Y-%m-%d %H:%M:%S') - Existing deploy finished"
-      else
-        chmod +x "$REPO_DIR/deploy.sh" || echo "$(date +'%Y-%m-%d %H:%M:%S') - Failed to chmod deploy.sh"
-        "$REPO_DIR/deploy.sh" &
-        deploy_pid=$!
-        echo "$deploy_pid" > "$PIDFILE"
-        echo "$(date +'%Y-%m-%d %H:%M:%S') - Started deploy (pid $deploy_pid), waiting for it to finish"
-        if wait "$deploy_pid"; then
-          echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy completed successfully"
-        else
-          echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy script exited with non-zero status"
-        fi
-        rm -f "$PIDFILE"
-      fi
+      chmod +x "$REPO_DIR/deploy.sh" && ("$REPO_DIR/deploy.sh" || echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy script failed")
     else
       echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy script not found at $REPO_DIR/deploy.sh"
     fi
+    # pause checks for a while after triggering deploy to avoid immediate re-checks
+    echo "$(date +'%Y-%m-%d %H:%M:%S') - Pausing checks for $PAUSE_AFTER_DEPLOY seconds"
+    sleep "$PAUSE_AFTER_DEPLOY"
   else
     # update same line in-place with the new timestamp (no newline)
     echo -ne "\rNo changes to deploy (branch $BRANCH up-to-date) - $(date +'%Y-%m-%d %H:%M:%S')"

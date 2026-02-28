@@ -18,6 +18,8 @@ SLEEP_SECONDS=5
 while true; do
   # determine current branch
   if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
+    # ensure we start a new line if a status was being updated in-place
+    printf "\n"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - Unable to determine current branch; sleeping"
     sleep "$SLEEP_SECONDS"
     continue
@@ -25,6 +27,7 @@ while true; do
 
   # fetch remote updates for this branch
   if ! git fetch origin "$BRANCH" >/dev/null 2>&1; then
+    printf "\n"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - git fetch failed for branch $BRANCH; sleeping"
     sleep "$SLEEP_SECONDS"
     continue
@@ -34,6 +37,8 @@ while true; do
   behind=$(git rev-list --count HEAD..origin/"$BRANCH" 2>/dev/null || echo 0)
 
   if [ "${behind:-0}" -gt 0 ]; then
+    # print a newline to finalize the inline status line, then log and run deploy
+    printf "\n"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - Branch $BRANCH is behind origin/$BRANCH by $behind commit(s) — running deploy"
     if [ -f "$REPO_DIR/deploy.sh" ]; then
       chmod +x "$REPO_DIR/deploy.sh" && ("$REPO_DIR/deploy.sh" || echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy script failed")
@@ -41,7 +46,8 @@ while true; do
       echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy script not found at $REPO_DIR/deploy.sh"
     fi
   else
-    echo "$(date +'%Y-%m-%d %H:%M:%S') - No changes to deploy (branch $BRANCH up-to-date)"
+    # update same line in-place with the new timestamp (no newline)
+    echo -ne "\rNo changes to deploy (branch $BRANCH up-to-date) - $(date +'%Y-%m-%d %H:%M:%S')"
   fi
 
   sleep "$SLEEP_SECONDS"

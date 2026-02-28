@@ -28,6 +28,12 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_ALLOW_PRE_RELEASE=true
+      - OMP_NUM_THREADS=2
+      - OLLAMA_OMP_NUM_THREADS=2
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
       interval: 1m

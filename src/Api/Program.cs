@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 
 using Api.Services;
+using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
@@ -31,10 +32,19 @@ builder.Services.Configure<ChatOptions>(options =>
     chatSection.Bind(options);
 });
 
+var processorCount = Environment.ProcessorCount;
+var maxConns = Math.Max(4, processorCount * 4);
 builder.Services.AddHttpClient(clientName, c =>
 {
     c.BaseAddress = new Uri(baseUrl);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    MaxConnectionsPerServer = maxConns
 });
+ThreadPool.GetMinThreads(out var workerMin, out var compMin);
+var desiredWorker = Math.Max(workerMin, processorCount * 2);
+ThreadPool.SetMinThreads(desiredWorker, compMin);
 
 builder.Services.AddScoped<IChatService, ChatService>();
 

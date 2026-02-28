@@ -49,22 +49,44 @@ if [[ -n "${OLLAMA_MODEL:-}" ]]; then
   # Wait for Ollama HTTP API to become available inside the container
   echo "Waiting for Ollama to be ready (up to 120s)..."
   attempt=0
-  until docker compose -f "$COMPOSE_FILE" exec -T ollama curl -sS http://localhost:11434/api/tags >/dev/null 2>&1; do
+  max_attempts=60
+  ready=false
+  while true; do
+    cid=$(docker compose -f "$COMPOSE_FILE" ps -q ollama 2>/dev/null || true)
+    if [[ -n "$cid" ]]; then
+      status=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "none")
+      if [[ "$status" == "healthy" ]]; then
+        echo "Ollama container reports healthy."
+        ready=true
+        break
+      fi
+      # If no health info, try a lightweight probe via local exec if curl exists
+      if [[ "$status" == "none" ]]; then
+        if docker compose -f "$COMPOSE_FILE" exec -T ollama sh -c 'command -v curl >/dev/null 2>&1 && curl -sS http://localhost:11434/api/tags >/dev/null 2>&1' >/dev/null 2>&1; then
+          echo "Ollama HTTP API responding." 
+          ready=true
+          break
+        fi
+      fi
+    fi
+
     attempt=$((attempt+1))
-    if [[ $attempt -ge 60 ]]; then
+    if [[ $attempt -ge $max_attempts ]]; then
       echo "Timeout waiting for Ollama to be ready." >&2
       break
     fi
     sleep 2
   done
 
-  if [[ $attempt -lt 60 ]]; then
+  if [[ "$ready" == true ]]; then
     echo "Pulling Ollama model: $OLLAMA_MODEL"
     if docker compose -f "$COMPOSE_FILE" exec -T ollama ollama pull "$OLLAMA_MODEL"; then
       echo "Model $OLLAMA_MODEL pulled successfully."
     else
       echo "Failed to pull model $OLLAMA_MODEL into Ollama." >&2
     fi
+  else
+    echo "Skipping model pull since Ollama did not become ready." >&2
   fi
 fi
 

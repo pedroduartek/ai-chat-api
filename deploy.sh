@@ -36,11 +36,15 @@ fi
 
 echo "Using embedded OLLAMA_MODEL=$OLLAMA_MODEL (no infra/docker/.env required)"
 
-echo "Bringing down existing containers (if any)..."
-docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans || echo "docker compose down returned non-zero (continuing)"
+echo "Bringing down existing containers (if any) and removing local images/volumes..."
+# remove containers, local images built by compose, and named volumes to ensure a fresh rebuild
+docker compose -f "$COMPOSE_FILE" down --rmi local --volumes --remove-orphans || echo "docker compose down returned non-zero (continuing)"
 
-echo "Building and starting services (detached)..."
-docker compose -f "$COMPOSE_FILE" up -d --build
+echo "Building services with no cache (full rebuild)..."
+docker compose -f "$COMPOSE_FILE" build --no-cache
+
+echo "Starting services (detached), forcing recreation..."
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate
 
 echo "Optional cleanup: pruning unused images and containers..."
 docker container prune -f || true

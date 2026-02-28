@@ -14,6 +14,7 @@ fi
 cd "$REPO_DIR" || exit 1
 
 SLEEP_SECONDS=5
+PAUSE_AFTER_DEPLOY=300 # seconds to pause after a deploy (5 minutes)
 
 while true; do
   # determine current branch
@@ -45,6 +46,9 @@ while true; do
     else
       echo "$(date +'%Y-%m-%d %H:%M:%S') - Deploy script not found at $REPO_DIR/deploy.sh"
     fi
+    # pause checks for a while after triggering deploy to avoid immediate re-checks
+    echo "$(date +'%Y-%m-%d %H:%M:%S') - Pausing checks for $PAUSE_AFTER_DEPLOY seconds"
+    sleep "$PAUSE_AFTER_DEPLOY"
   else
     # update same line in-place with the new timestamp (no newline)
     echo -ne "\rNo changes to deploy (branch $BRANCH up-to-date) - $(date +'%Y-%m-%d %H:%M:%S')"

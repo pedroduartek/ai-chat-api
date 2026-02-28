@@ -53,8 +53,11 @@ if [[ -n "${OLLAMA_MODEL:-}" ]]; then
   ready=false
   while true; do
     cid=$(docker compose -f "$COMPOSE_FILE" ps -q ollama 2>/dev/null || true)
+    echo "Attempt $((attempt+1)) - checking Ollama..."
     if [[ -n "$cid" ]]; then
       status=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "none")
+      echo "  container id: $cid"
+      echo "  reported health status: $status"
       if [[ "$status" == "healthy" ]]; then
         echo "Ollama container reports healthy."
         ready=true
@@ -62,12 +65,17 @@ if [[ -n "${OLLAMA_MODEL:-}" ]]; then
       fi
       # If no health info, try a lightweight probe via local exec if curl exists
       if [[ "$status" == "none" ]]; then
+        echo "  no health information available; attempting HTTP probe inside container..."
         if docker compose -f "$COMPOSE_FILE" exec -T ollama sh -c 'command -v curl >/dev/null 2>&1 && curl -sS http://localhost:11434/api/tags >/dev/null 2>&1' >/dev/null 2>&1; then
           echo "Ollama HTTP API responding." 
           ready=true
           break
         fi
       fi
+      echo "  recent Ollama logs (tail 10):"
+      docker compose -f "$COMPOSE_FILE" logs --no-color --tail=10 ollama || true
+    else
+      echo "  Ollama service container not found yet (no container id)."
     fi
 
     attempt=$((attempt+1))

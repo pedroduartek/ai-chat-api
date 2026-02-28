@@ -1,118 +1,13 @@
-KNOWLEDGE BASE
-
-[HOME]
-- Name: Pedro Duarte
-- Title: Senior Software Engineer
-- Summary: Backend software engineer with 5 years and 11 months of experience in C#/.NET, microservices, and event-driven systems.
-- Website purpose: This website is a learning project. Pedro knows close to nothing about frontend development and is using AI-assisted tools to build the site and learn React, TypeScript, and modern frontend practices.
-- Mindset: Experiment in leveraging AI for developer productivity, similar curiosity/automation mindset used in backend systems and Home Assistant lab.
-
-[ABOUT]
-- Role: Senior Software Engineer with 5 years and 11 months of experience building scalable platforms in C#/.NET (8+), microservices, and event-driven architectures with Kafka.
-- Track record: Tech Lead experience; owns system design, delivery, and production reliability across SQL and NoSQL data stores.
-- Values: Clean, maintainable code; production reliability as a first-class concern.
-- UX: Not a frontend developer and not focused on building beautiful pages, but deeply interested in user experience; participates in UX discussions when possible.
-- Personal Hobbies: Fishing, motorcycle riding, cooking.
-- Home lab: Self-hosted Home Assistant environment with 50+ Zigbee devices; experiments with automation reliability and event-driven thinking.
-For more information about Pedro Duarte go to: https://pedroduartek.com/about
-
-[EDUCATION as a Studant]
-1) Polytechnic Institute of Setúbal
-   - Degree: Bachelor's Degree in Management Information Systems
-   - Dates: Sep 2017 – Jun 2020
-   - Location: Setúbal, Portugal
-   - GPA: 15/20
-   - Focus: Management + technology; full information system development lifecycle
-   - Key courses: Application Development; Database Management; Information Systems (Analysis, Design, Architecture, Project Management, Quality, Security); Mathematics
-2) Formabase
-   - Certificate: Web Creation
-   - Dates: Oct 2016 – Feb 2017
-   - Location: Lisbon, Portugal
-   - Topics: PHP, HTML, CSS
-
-For more information about Pedro Duarte education go to: https://pedroduartek.com/about
-
-[CONFERENCES & EVENTS]
-1) Azure Dev Summit
-   - Role: Participant
-   - When: Oct 2025
-   - Where: Lisbon, Portugal
-   - Notes: Microsoft technology-focused conference spanning 4 days; included a full-day workshop building an app with Aspire.
-2) Web Summit
-   - Role: Volunteer
-   - When: Nov 2019
-   - Where: Lisbon, Portugal
-   - Notes: Leading global technology conference; helped organizing in the days prior to the event.
-
-For more information about Pedro Duarte Conferences & Events go to: https://pedroduartek.com/conferences
-
-[SKILLS]
-Backend
-- C# (5 years)
-- .NET 6–10 (5 years)
-- REST APIs (5 years)
-- ASP.NET Core (4 years)
-- Microservices architecture (4 years)
-- Event-driven systems (3 years)
-- Domain-driven design (3 years)
-
-Data & Messaging
-- SQL Server (5 years)
-- Kafka (3 years)
-- PostgreSQL (2 years)
-- Elasticsearch (2 years)
-- Redis (2 years)
-
-Infrastructure & DevOps
-- Docker (4 years)
-- Kubernetes (2 years)
-- Azure DevOps Pipelines (2 years)
-- Structurizr (0 years)
-
-Other
-- Tech Lead experience (2 years)
-- Home Assistant (4 years)
-- Zigbee (4 years)
-- GitHub Copilot (1 year)
-
-For more detailed information about the skills of Pedro Duarte go to: https://pedroduartek.com/skills
-
-[Professional Experience]
-Company: Enhesa
-Tech Stack: C# .NET 10 Kafka Elasticsearch PostgreSQL Entity Framework Kubernetes Redis Structurizr SQL Server Microservices
-Role: Senior Software Engineer - Tech Lead
-Mar 2023 - Present
-Location: Lisbon, Portugal
-
-Role:Software Engineer
-May 2022 - Mar 2023
-Location: Lisbon, Portugal
-
-Company: VORTAL
-Tech Stack: C# .NET Core SQL Server Entity Framework 
-Role: Software Engineer 
-Aug 2021 - Apr 2022
-Location: Lisbon, Portugal
-
-Company: Closer Consulting
-Tech Stack: .NET MVC Razor SQL Server 
-Role:Junior Software Engineer
-Sep 2020 - Aug 2021
-Location: Lisbon, Portugal
-
-Role:Intern Software Engineer
-Jun 2020 - Sep 2020
-
-Worked in 3 companies over the timespan of 6 years.
-
-For more information about Professional Experience go to: https://pedroduartek.com/experience
-
-Question: Where can you download Pedro Duarte's CV?
-Answer: https://pedroduartek.com/cv
-
-[Contact Information]
-(If asked about Contact Information, provide the following)
-Personal website: https://pedroduartek.com/
-Linkedin: https://www.linkedin.com/in/pedroduartek/
-Github: https://github.com/pedroduartek
-For more contact information of Pedro Duarte go to: https://pedroduartek.com/contact 
+{"id":"usage","title":"KB_USAGE","text":"Answer only using this KB. If the information is not in this KB, reply exactly: \"I can’t find that on www.pedroduartek.com.\"","keywords":["usage","guideline"]}
+{"id":"home","title":"HOME","text":"Pedro Duarte — Senior Software Engineer. Backend-focused (.NET/C#). Website is a learning project using AI-assisted tools to learn React/TypeScript.","keywords":["pedro","home","summary","backend"]}
+{"id":"about","title":"ABOUT","text":"Senior Software Engineer with tech-lead experience. Focus: system design, delivery, production reliability across SQL and NoSQL stores.","keywords":["about","role","tech lead","reliability"]}
+{"id":"education_poly","title":"EDUCATION_POLYTECHNIC","text":"Polytechnic Institute of Setúbal — BSc Management Information Systems, Sep 2017 – Jun 2020, GPA 15/20.","keywords":["education","polytechnic","setubal"]}
+{"id":"education_formabase","title":"EDUCATION_FORMABASE","text":"Formabase — Certificate in Web Creation, Oct 2016 – Feb 2017 (PHP, HTML, CSS).","keywords":["education","certificate","web"]}
+{"id":"conferences","title":"CONFERENCES","text":"Azure Dev Summit (Participant, Oct 2025, Lisbon); Web Summit (Volunteer, Nov 2019, Lisbon).","keywords":["conferences","azure","web summit"]}
+{"id":"skills","title":"SKILLS","text":"Backend: C#, .NET 6–10, REST APIs, ASP.NET Core, microservices, event-driven systems. Data: SQL Server, Kafka, PostgreSQL, Elasticsearch, Redis. Infra: Docker, Kubernetes, Azure DevOps.","keywords":["skills","c#","dotnet","microservices"]}
+{"id":"experience_enhesa","title":"EXPERIENCE_ENHESA","text":"Enhesa — Senior Software Engineer / Tech Lead (Mar 2023 - Present). Stack: C#, .NET 10, Kafka, Elasticsearch, PostgreSQL, Kubernetes.","keywords":["experience","enhesa","tech lead"]}
+{"id":"experience_previous","title":"EXPERIENCE_PREV","text":"Previous roles: Software Engineer at Enhesa (May 2022 - Mar 2023), VORTAL (Aug 2021 - Apr 2022), Closer Consulting (Sep 2020 - Aug 2021).","keywords":["experience","previous"]}
+{"id":"contact","title":"CONTACT","text":"Website: https://pedroduartek.com/ — About: /about — CV: /cv — Experience: /experience — Skills: /skills — Contact page: /contact","keywords":["contact","website","links"]}
+{"id":"faq_cv","title":"FAQ_CV","text":"Q: Where can I download Pedro Duarte's CV? A: https://pedroduartek.com/cv","keywords":["cv","download"]}
+{"id":"faq_location","title":"FAQ_LOCATION","text":"Q: Where is Pedro based? A: Lisbon, Portugal.","keywords":["location","lisbon"]}
+{"id":"faq_role","title":"FAQ_ROLE","text":"Q: What is Pedro's primary role? A: Senior Software Engineer focused on backend systems and reliability.","keywords":["role","senior software engineer"]}

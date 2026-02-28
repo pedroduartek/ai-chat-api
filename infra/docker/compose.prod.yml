@@ -7,11 +7,11 @@ services:
       context: ../../src/Api              # /opt/pedro-chat/src/Api
     image: ai-chat-api:local
     restart: unless-stopped
-    env_file: .env
+    # No local .env required; environment values set here
     environment:
       - ASPNETCORE_URLS=http://+:80
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_MODEL=llama3.2:1b
     networks:
       - internal
 

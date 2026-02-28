@@ -88,10 +88,27 @@ if [[ -n "${OLLAMA_MODEL:-}" ]]; then
 
   if [[ "$ready" == true ]]; then
     echo "Pulling Ollama model: $OLLAMA_MODEL"
-    if docker compose -f "$COMPOSE_FILE" exec -T ollama ollama pull "$OLLAMA_MODEL"; then
-      echo "Model $OLLAMA_MODEL pulled successfully."
-    else
-      echo "Failed to pull model $OLLAMA_MODEL into Ollama." >&2
+    max_pull_attempts=5
+    pull_attempt=0
+    pulled=false
+    while [[ $pull_attempt -lt $max_pull_attempts ]]; do
+      pull_attempt=$((pull_attempt+1))
+      echo "  pull attempt $pull_attempt/$max_pull_attempts..."
+      if docker compose -f "$COMPOSE_FILE" exec ollama ollama pull "$OLLAMA_MODEL"; then
+        echo "Model $OLLAMA_MODEL pulled successfully."
+        pulled=true
+        break
+      else
+        echo "  pull attempt $pull_attempt failed. Showing recent Ollama logs (tail 30):"
+        docker compose -f "$COMPOSE_FILE" logs --no-color --tail=30 ollama || true
+        sleep $((5 * pull_attempt))
+      fi
+    done
+
+    if [[ "$pulled" != true ]]; then
+      echo "Failed to pull model $OLLAMA_MODEL after $max_pull_attempts attempts." >&2
+      echo "You can try manually: docker compose -f infra/docker/compose.prod.yml exec ollama ollama pull $OLLAMA_MODEL" >&2
+      exit 2
     fi
   else
     echo "Skipping model pull since Ollama did not become ready." >&2

@@ -11,7 +11,7 @@ public class ChatService : IChatService
     private readonly ChatOptions _options;
     private readonly string _kb;
 
-    private const string SystemPrompt = "You are a website Q&A assistant for Pedro Duarte.\n\nRULES (strict):\n1) Answer ONLY using the information inside the KNOWLEDGE BASE below.\n2) If the answer is not explicitly found in the KNOWLEDGE BASE, reply exactly with:\n   \"I can’t find that on www.pedroduartek.com.\"\n3) Do NOT guess, do NOT use external knowledge, do NOT invent details.\n4) Keep answers short, friendly, and professional. Use bullet points when helpful.\n5) If the user asks for contact details, you may mention Lisbon, Portugal and that the site has an About/Contact section, but do not invent new contact info.";
+    private const string SystemPrompt = "You are a website Q&A assistant for Pedro Duarte.\n\nRULES (strict):\n1) Answer ONLY using the information inside the KNOWLEDGE BASE below.\n2) If the answer is not explicitly found in the KNOWLEDGE BASE, reply exactly with: \"I can’t find that on www.pedroduartek.com.\"\n3) Do NOT guess, do NOT use external knowledge, do NOT invent details.\n4) Keep answers short, friendly, and professional.\n5) If the user asks for contact details, you may mention Lisbon, Portugal and that the site has an About/Contact section, but do not invent new contact info.\n\nOUTPUT FORMAT (mandatory):\n- Respond with a single JSON object and nothing else. The object must have a single string property named \"text\", for example: {\"text\":\"<your answer here>\"}.\n- If the answer is the fallback, set \"text\" to exactly: \"I can’t find that on www.pedroduartek.com.\"";
 
     public ChatService(IHttpClientFactory clientFactory, Microsoft.Extensions.Options.IOptions<ChatOptions> options)
     {
@@ -71,6 +71,7 @@ public class ChatService : IChatService
             var parts = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var sb = new StringBuilder();
             var parsedAny = false;
+            const string fallback = "I can’t find that on www.pedroduartek.com.";
 
             foreach (var part in parts)
             {
@@ -82,12 +83,18 @@ public class ChatService : IChatService
                     {
                         if (root.TryGetProperty("response", out var responseProp) && responseProp.ValueKind == JsonValueKind.String)
                         {
-                            sb.Append(responseProp.GetString());
+                            var txt = responseProp.GetString() ?? string.Empty;
+                            if (txt.Contains(fallback, StringComparison.Ordinal))
+                                return fallback;
+                            sb.Append(txt);
                             parsedAny = true;
                         }
                         else if (root.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
                         {
-                            sb.Append(textProp.GetString());
+                            var txt = textProp.GetString() ?? string.Empty;
+                            if (txt.Contains(fallback, StringComparison.Ordinal))
+                                return fallback;
+                            sb.Append(txt);
                             parsedAny = true;
                         }
                     }

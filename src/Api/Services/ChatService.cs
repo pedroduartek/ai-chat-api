@@ -22,7 +22,29 @@ public class ChatService : IChatService
             var kbPath = Path.Combine(AppContext.BaseDirectory, "Resources", "website_kb.txt");
             if (File.Exists(kbPath))
             {
-                _kb = File.ReadAllText(kbPath);
+                // The KB file is newline-delimited JSON objects. Parse each line and extract the `text`.
+                var lines = File.ReadAllLines(kbPath);
+                var parts = new List<string>();
+                foreach (var line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(line);
+                        var root = doc.RootElement;
+                        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+                        {
+                            parts.Add(textProp.GetString() ?? string.Empty);
+                        }
+                    }
+                    catch
+                    {
+                        // ignore malformed lines
+                    }
+                }
+
+                _kb = parts.Count > 0 ? string.Join("\n\n", parts) : string.Empty;
             }
             else
             {
@@ -99,7 +121,7 @@ public class ChatService : IChatService
         sb.AppendLine(message);
         sb.AppendLine();
         sb.AppendLine("Remember: if not found in the KNOWLEDGE BASE, respond exactly with:");
-        sb.AppendLine("\"I can’t find that on the content of this website.\"");
+        sb.AppendLine("\"I can’t find that on www.pedroduartek.com.\"");
 
         var payload = new { model, prompt = sb.ToString(), stream = false };
         var resp = await client.PostAsJsonAsync(_options.GenerateEndpoint, payload);

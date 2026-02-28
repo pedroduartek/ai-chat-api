@@ -10,8 +10,24 @@ echo "Checking prerequisites..."
 command -v git >/dev/null 2>&1 || { echo "Git not found in PATH. Install Git or add it to PATH." >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || { echo "Docker not found in PATH. Install Docker or add it to PATH." >&2; exit 1; }
 
-echo "Pulling latest code from origin/$BRANCH..."
-git pull origin "$BRANCH"
+echo "Fetching latest code from origin and discarding local changes (branch: $BRANCH)..."
+git fetch origin --prune
+
+# Checkout branch (create if missing) and reset to remote state
+if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
+  git checkout "$BRANCH"
+else
+  # try to create branch tracking remote, otherwise create new local branch
+  git checkout -b "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout -b "$BRANCH"
+fi
+
+echo "Resetting local branch to origin/$BRANCH"
+git reset --hard "origin/$BRANCH"
+
+echo "Removing untracked files and directories"
+git clean -fd
+
+echo "Fetching completed. Local repo now matches origin/$BRANCH."
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   echo "Compose file not found: $COMPOSE_FILE" >&2

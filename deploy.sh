@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/infra/docker/compose.prod.yml"
-ENV_FILE="$SCRIPT_DIR/infra/docker/.env"
+OLLAMA_MODEL="llama3.2:1b"
 BRANCH="${1:-main}"
 
 echo "Checking prerequisites..."
@@ -34,17 +34,7 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
   exit 1
 fi
 
-if [[ -f "$ENV_FILE" ]]; then
-  # Load env vars from infra/docker/.env so OLLAMA_MODEL and others are available
-  # shellcheck disable=SC1090
-  set -a
-  # Use a subshell to avoid exporting local shell functions
-  . "$ENV_FILE"
-  set +a
-else
-  echo "Warning: env file not found: $ENV_FILE" >&2
-  echo "If you need environment variables, create $ENV_FILE on the VPS before running this script. Continuing..."
-fi
+echo "Using embedded OLLAMA_MODEL=$OLLAMA_MODEL (no infra/docker/.env required)"
 
 echo "Bringing down existing containers (if any)..."
 docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans || echo "docker compose down returned non-zero (continuing)"

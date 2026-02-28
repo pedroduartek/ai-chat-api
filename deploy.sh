@@ -18,7 +18,14 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$ENV_FILE" ]]; then
+if [[ -f "$ENV_FILE" ]]; then
+  # Load env vars from infra/docker/.env so OLLAMA_MODEL and others are available
+  # shellcheck disable=SC1090
+  set -a
+  # Use a subshell to avoid exporting local shell functions
+  . "$ENV_FILE"
+  set +a
+else
   echo "Warning: env file not found: $ENV_FILE" >&2
   echo "If you need environment variables, create $ENV_FILE on the VPS before running this script. Continuing..."
 fi
@@ -34,5 +41,31 @@ docker container prune -f || true
 docker image prune -f || true
 
 echo "Deployment finished successfully."
+
+# If an Ollama model is configured, try to pull it into the Ollama container
+if [[ -n "${OLLAMA_MODEL:-}" ]]; then
+  echo "OLLAMA_MODEL is set to '$OLLAMA_MODEL' — ensuring model is available in Ollama..."
+
+  # Wait for Ollama HTTP API to become available inside the container
+  echo "Waiting for Ollama to be ready (up to 120s)..."
+  attempt=0
+  until docker compose -f "$COMPOSE_FILE" exec -T ollama curl -sS http://localhost:11434/api/tags >/dev/null 2>&1; do
+    attempt=$((attempt+1))
+    if [[ $attempt -ge 60 ]]; then
+      echo "Timeout waiting for Ollama to be ready." >&2
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ $attempt -lt 60 ]]; then
+    echo "Pulling Ollama model: $OLLAMA_MODEL"
+    if docker compose -f "$COMPOSE_FILE" exec -T ollama ollama pull "$OLLAMA_MODEL"; then
+      echo "Model $OLLAMA_MODEL pulled successfully."
+    else
+      echo "Failed to pull model $OLLAMA_MODEL into Ollama." >&2
+    fi
+  fi
+fi
 
 exit 0

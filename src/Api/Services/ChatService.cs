@@ -11,7 +11,7 @@ public class ChatService : IChatService
     private readonly ChatOptions _options;
     private readonly string _kb;
 
-    private const string SystemPrompt = "You are a website Q&A assistant for Pedro Duarte.\n\nRULES (strict):\n1) Answer ONLY using the information inside the KNOWLEDGE BASE below.\n2) If the answer is not explicitly found in the KNOWLEDGE BASE, reply exactly with: \"I can’t find that on www.pedroduartek.com.\"\n3) Do NOT guess, do NOT use external knowledge, do NOT invent details.\n4) Keep answers short, friendly, and professional.\n5) If the user asks for contact details, you may mention Lisbon, Portugal and that the site has an About/Contact section, but do not invent new contact info.\n\nOUTPUT FORMAT (mandatory):\n- Respond with a single JSON object and nothing else. The object must have a single string property named \"text\", for example: {\"text\":\"<your answer here>\"}.\n- If the answer is the fallback, set \"text\" to exactly: \"I can’t find that on www.pedroduartek.com.\"";
+    private const string SystemPrompt = "You are a website Q&A assistant for Pedro Duarte.\n\nRULES (strict):\n1) Answer ONLY using the information inside the KNOWLEDGE BASE below.\n2) If the answer is not explicitly found in the KNOWLEDGE BASE, reply exactly with: \"I can’t find that on www.pedroduartek.com.\"\n3) Do NOT guess, do NOT use external knowledge, do NOT invent details.\n4) Keep answers short, friendly, and professional.\n5) If the user asks for contact details, you may mention Lisbon, Portugal and that the site has an About/Contact section, but do not invent new contact info.\n\nOUTPUT (mandatory):\n- Reply with plain text only. Do NOT return JSON objects, code blocks, markup, or any other wrapper — only the answer text.\n- If the answer is the fallback, respond exactly: \"I can’t find that on www.pedroduartek.com.\"";
 
     public ChatService(IHttpClientFactory clientFactory, Microsoft.Extensions.Options.IOptions<ChatOptions> options)
     {
@@ -203,7 +203,8 @@ public class ChatService : IChatService
         sb.Append("User question: ");
         sb.AppendLine(message);
         sb.AppendLine();
-        sb.AppendLine("Remember: if not found in the KNOWLEDGE BASE, respond exactly with:");
+        sb.AppendLine("Do not wrap your answer in JSON, code blocks, or any markup. Reply with plain text only.");
+        sb.AppendLine("If the answer is not in the KNOWLEDGE BASE, reply exactly with:");
         sb.AppendLine("\"I can’t find that on www.pedroduartek.com.\"");
 
         var payload = new { model, prompt = sb.ToString(), stream = false };

@@ -68,10 +68,86 @@ public class ChatService : IChatService
         string finalAnswer = content;
         try
         {
+            const string fallback = "I can’t find that on www.pedroduartek.com.";
+
+            // Try to parse the whole response as JSON and extract common fields.
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                var root = doc.RootElement;
+
+                // Helper to normalize text and check fallback
+                static string NormalizeText(string txt, string fallback)
+                {
+                    if (string.IsNullOrEmpty(txt)) return string.Empty;
+                    if (txt.Contains(fallback, StringComparison.Ordinal)) return fallback;
+                    return txt;
+                }
+
+                // Direct `text` property
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
+                {
+                    return NormalizeText(textProp.GetString() ?? string.Empty, fallback);
+                }
+
+                // Some APIs return { "answer": "..." }
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("answer", out var answerProp))
+                {
+                    if (answerProp.ValueKind == JsonValueKind.String)
+                    {
+                        var ansStr = answerProp.GetString() ?? string.Empty;
+                        // If the answer string itself is JSON, try to parse it
+                        try
+                        {
+                            using var inner = JsonDocument.Parse(ansStr);
+                            var innerRoot = inner.RootElement;
+                            if (innerRoot.ValueKind == JsonValueKind.Object && innerRoot.TryGetProperty("text", out var innerText) && innerText.ValueKind == JsonValueKind.String)
+                                return NormalizeText(innerText.GetString() ?? string.Empty, fallback);
+                        }
+                        catch { }
+
+                        return NormalizeText(ansStr, fallback);
+                    }
+                }
+
+                // Model-style responses: choices -> [ { text: "..." } ] or choices -> [ { message: { content: "..." } } ]
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("choices", out var choicesProp) && choicesProp.ValueKind == JsonValueKind.Array && choicesProp.GetArrayLength() > 0)
+                {
+                    var first = choicesProp[0];
+                    // direct text
+                    if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("text", out var chText) && chText.ValueKind == JsonValueKind.String)
+                    {
+                        var txt = chText.GetString() ?? string.Empty;
+                        // if text is JSON, try to parse
+                        try
+                        {
+                            using var inner = JsonDocument.Parse(txt);
+                            var innerRoot = inner.RootElement;
+                            if (innerRoot.ValueKind == JsonValueKind.Object && innerRoot.TryGetProperty("text", out var innerText) && innerText.ValueKind == JsonValueKind.String)
+                                return NormalizeText(innerText.GetString() ?? string.Empty, fallback);
+                        }
+                        catch { }
+
+                        return NormalizeText(txt, fallback);
+                    }
+
+                    // message.content
+                    if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("message", out var messageProp) && messageProp.ValueKind == JsonValueKind.Object && messageProp.TryGetProperty("content", out var contentProp) && contentProp.ValueKind == JsonValueKind.String)
+                    {
+                        var txt = contentProp.GetString() ?? string.Empty;
+                        return NormalizeText(txt, fallback);
+                    }
+                }
+            }
+            catch
+            {
+                // not a top-level JSON object, fall back to scanning lines
+            }
+
+            // Fallback: scan each newline-separated line for JSON objects with `text` or `response`.
             var parts = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var sb = new StringBuilder();
             var parsedAny = false;
-            const string fallback = "I can’t find that on www.pedroduartek.com.";
 
             foreach (var part in parts)
             {

@@ -4,8 +4,7 @@
 services:
   api:
     build:
-      context: ../..                      # /opt/pedro-chat
-      dockerfile: src/Api/Dockerfile
+      context: ../../src/Api              # /opt/pedro-chat/src/Api
     image: ai-chat-api:local
     restart: unless-stopped
     env_file: .env

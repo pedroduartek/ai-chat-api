@@ -88,7 +88,7 @@ public class ChatService : IChatService
     private async Task<string> SendMessage(string message)
     {
         var client = _clientFactory.CreateClient(_options.ClientName);
-        var model = _options.ModelDefault;
+        var model = "llama3.2:1b";
         var sb = new StringBuilder();
         sb.AppendLine(SystemPrompt);
         sb.AppendLine();

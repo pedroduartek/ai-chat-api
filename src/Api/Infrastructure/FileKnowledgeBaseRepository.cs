@@ -37,7 +37,7 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
 
         var queryTokens = Tokenize(query);
         var matched = entries
-            .Where(e => e.Keywords.Any(k => queryTokens.Contains(k)))
+            .Where(e => EntrySearchTokens(e).Any(k => queryTokens.Contains(k)))
             .ToList();
 
         // Fall back to all entries when nothing matches so the model always has context.
@@ -125,5 +125,18 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
         foreach (Match m in Regex.Matches(text, @"\b[a-zA-Z#\+]{3,}\b"))
             tokens.Add(m.Value.ToLowerInvariant());
         return tokens;
+    }
+
+    // Returns all searchable tokens for an entry: its explicit keywords plus
+    // tokens derived from the id and title so natural-language queries like
+    // "companies" still hit "EXPERIENCE_ENHESA" via the word "experience".
+    private static IEnumerable<string> EntrySearchTokens(KbEntry entry)
+    {
+        foreach (var kw in entry.Keywords)
+            yield return kw;
+        foreach (var t in Tokenize(entry.Id))
+            yield return t;
+        foreach (var t in Tokenize(entry.Title))
+            yield return t;
     }
 }

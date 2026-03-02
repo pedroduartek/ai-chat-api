@@ -24,14 +24,6 @@ jobs:
       - name: Build
         run: dotnet build ai-chat-api.sln --no-restore --configuration Release
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: |
-            src/Api/bin/Release/
-            tests/Api.Tests/bin/Release/
-
   test:
     runs-on: ubuntu-latest
     needs: build
@@ -44,11 +36,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-          path: .
+      - name: Restore
+        run: dotnet restore ai-chat-api.sln
+
+      - name: Build
+        run: dotnet build ai-chat-api.sln --no-restore --configuration Release
 
       - name: Test
         run: dotnet test tests/Api.Tests/Api.Tests.csproj --no-build --configuration Release --verbosity normal

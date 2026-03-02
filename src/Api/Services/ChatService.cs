@@ -1,65 +1,28 @@
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.IO;
+
+using Api.Application;
 
 namespace Api.Services;
 
 public class ChatService : IChatService
 {
-    private readonly IHttpClientFactory _clientFactory;
+    private readonly IKnowledgeBaseRepository _kbRepo;
+    private readonly IOllamaClient _ollamaClient;
     private readonly ChatOptions _options;
-    private readonly string _kb;
 
-    private const string SystemPrompt = "You are a website Q&A assistant for Pedro Duarte.\n\nRULES (strict):\n1) Answer ONLY using the information inside the KNOWLEDGE BASE below.\n2) If the answer is not explicitly found in the KNOWLEDGE BASE, reply exactly with: \"I couldn't find information to reply to your question.\"\n3) Do NOT guess, do NOT use external knowledge, do NOT invent details.\n4) Keep answers short, friendly, and professional.\n5) If the user asks for contact details, you may mention Lisbon, Portugal and that the site has an About/Contact section, but do not invent new contact info.\n\nOUTPUT (mandatory):\n- Reply with plain text only. Do NOT return JSON objects, code blocks, markup, or any other wrapper — only the answer text.\n- If the answer is the fallback, respond exactly: \"I couldn't find information to reply to your question.\"";
+    private const string SystemPrompt = "You are a website Q&A assistant for Pedro Duarte.\n\nRULES (strict):\n1) Answer ONLY using the information inside the KNOWLEDGE BASE below.\n2) If the answer is not explicitly found in the KNOWLEDGE BASE, reply exactly with: \"I couldn't find information to reply to your question.\"\n3) Do NOT guess, do NOT use external knowledge, do NOT invent details.\n+4) Keep answers short, friendly, and professional.\n+5) If the user asks for contact details, you may mention Lisbon, Portugal and that the site has an About/Contact section, but do not invent new contact info.\n\nOUTPUT (mandatory):\n- Reply with plain text only. Do NOT return JSON objects, code blocks, markup, or any other wrapper — only the answer text.\n- If the answer is the fallback, respond exactly: \"I couldn't find information to reply to your question.\"";
 
-    public ChatService(IHttpClientFactory clientFactory, Microsoft.Extensions.Options.IOptions<ChatOptions> options)
+    public ChatService(IKnowledgeBaseRepository kbRepo, IOllamaClient ollamaClient, Microsoft.Extensions.Options.IOptions<ChatOptions> options)
     {
-        _clientFactory = clientFactory;
+        _kbRepo = kbRepo;
+        _ollamaClient = ollamaClient;
         _options = options?.Value ?? new ChatOptions();
-        try
-        {
-            var kbPath = Path.Combine(AppContext.BaseDirectory, "Resources", "website_kb.txt");
-            if (File.Exists(kbPath))
-            {
-                // The KB file is newline-delimited JSON objects. Parse each line and extract the `text`.
-                var lines = File.ReadAllLines(kbPath);
-                var parts = new List<string>();
-                foreach (var line in lines)
-                {
-                    if (string.IsNullOrWhiteSpace(line))
-                        continue;
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(line);
-                        var root = doc.RootElement;
-                        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
-                        {
-                            parts.Add(textProp.GetString() ?? string.Empty);
-                        }
-                    }
-                    catch
-                    {
-                        // ignore malformed lines
-                    }
-                }
-
-                _kb = parts.Count > 0 ? string.Join("\n\n", parts) : string.Empty;
-            }
-            else
-            {
-                _kb = string.Empty;
-            }
-        }
-        catch
-        {
-            _kb = string.Empty;
-        }
     }
 
     public async Task<string> GenerateAnswerAsync(string message)
     {
-        string answer = await SendMessage(message);
+        var answer = await SendMessage(message);
         return FormatAnswer(answer);
     }
 
@@ -70,13 +33,11 @@ public class ChatService : IChatService
         {
             const string fallback = "I couldn't find information to reply to your question.";
 
-            // Try to parse the whole response as JSON and extract common fields.
             try
             {
                 using var doc = JsonDocument.Parse(content);
                 var root = doc.RootElement;
 
-                // Helper to normalize text and check fallback
                 static string NormalizeText(string txt, string fallback)
                 {
                     if (string.IsNullOrEmpty(txt)) return string.Empty;
@@ -84,19 +45,16 @@ public class ChatService : IChatService
                     return txt;
                 }
 
-                // Direct `text` property
                 if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
                 {
                     return NormalizeText(textProp.GetString() ?? string.Empty, fallback);
                 }
 
-                // Some APIs return { "answer": "..." }
                 if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("answer", out var answerProp))
                 {
                     if (answerProp.ValueKind == JsonValueKind.String)
                     {
                         var ansStr = answerProp.GetString() ?? string.Empty;
-                        // If the answer string itself is JSON, try to parse it
                         try
                         {
                             using var inner = JsonDocument.Parse(ansStr);
@@ -110,15 +68,12 @@ public class ChatService : IChatService
                     }
                 }
 
-                // Model-style responses: choices -> [ { text: "..." } ] or choices -> [ { message: { content: "..." } } ]
                 if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("choices", out var choicesProp) && choicesProp.ValueKind == JsonValueKind.Array && choicesProp.GetArrayLength() > 0)
                 {
                     var first = choicesProp[0];
-                    // direct text
                     if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("text", out var chText) && chText.ValueKind == JsonValueKind.String)
                     {
                         var txt = chText.GetString() ?? string.Empty;
-                        // if text is JSON, try to parse
                         try
                         {
                             using var inner = JsonDocument.Parse(txt);
@@ -131,7 +86,6 @@ public class ChatService : IChatService
                         return NormalizeText(txt, fallback);
                     }
 
-                    // message.content
                     if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("message", out var messageProp) && messageProp.ValueKind == JsonValueKind.Object && messageProp.TryGetProperty("content", out var contentProp) && contentProp.ValueKind == JsonValueKind.String)
                     {
                         var txt = contentProp.GetString() ?? string.Empty;
@@ -141,10 +95,8 @@ public class ChatService : IChatService
             }
             catch
             {
-                // not a top-level JSON object, fall back to scanning lines
             }
 
-            // Fallback: scan each newline-separated line for JSON objects with `text` or `response`.
             var parts = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var sb = new StringBuilder();
             var parsedAny = false;
@@ -192,13 +144,13 @@ public class ChatService : IChatService
 
     private async Task<string> SendMessage(string message)
     {
-        var client = _clientFactory.CreateClient(_options.ClientName);
         var model = "llama3.2:1b";
         var sb = new StringBuilder();
         sb.AppendLine(SystemPrompt);
         sb.AppendLine();
-        if (!string.IsNullOrWhiteSpace(_kb))
-            sb.AppendLine(_kb);
+        var kb = await _kbRepo.GetKnowledgeBaseAsync();
+        if (!string.IsNullOrWhiteSpace(kb))
+            sb.AppendLine(kb);
         sb.AppendLine();
         sb.Append("User question: ");
         sb.AppendLine(message);
@@ -208,8 +160,7 @@ public class ChatService : IChatService
         sb.AppendLine("\"I couldn't find information to reply to your question.\"");
 
         var payload = new { model, prompt = sb.ToString(), stream = false };
-        var resp = await client.PostAsJsonAsync(_options.GenerateEndpoint, payload);
-        var content = await resp.Content.ReadAsStringAsync();
+        var content = await _ollamaClient.GenerateAsync(_options.GenerateEndpoint, payload);
         return content;
     }
 }

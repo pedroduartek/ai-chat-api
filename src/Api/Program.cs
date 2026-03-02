@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 
 using Api.Services;
+using Api.Application;
+using Api.Infrastructure;
 using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +48,8 @@ ThreadPool.GetMinThreads(out var workerMin, out var compMin);
 var desiredWorker = Math.Max(workerMin, processorCount * 2);
 ThreadPool.SetMinThreads(desiredWorker, compMin);
 
+builder.Services.AddScoped<IKnowledgeBaseRepository, FileKnowledgeBaseRepository>();
+builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
 builder.Services.AddScoped<IChatService, ChatService>();
 
 var app = builder.Build();

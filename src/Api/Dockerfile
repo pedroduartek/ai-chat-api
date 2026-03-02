@@ -12,4 +12,6 @@ RUN dotnet publish "Api.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+# Ensure the Resources folder (website_kb.txt) from the project is present in the final image
+COPY --from=build /src/Resources ./Resources
 ENTRYPOINT ["dotnet", "Api.dll"]

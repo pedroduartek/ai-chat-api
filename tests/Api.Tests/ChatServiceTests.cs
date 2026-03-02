@@ -10,41 +10,29 @@ namespace Api.Tests;
 
 public class ChatServiceTests
 {
-    private class FakeHandler : HttpMessageHandler
+    private class FakeKnowledgeBaseRepo : Api.Application.IKnowledgeBaseRepository
     {
-        private readonly string _responseContent;
-
-        public FakeHandler(string responseContent)
-        {
-            _responseContent = responseContent;
-        }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            var resp = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(_responseContent)
-            };
-            return Task.FromResult(resp);
-        }
+        private readonly string _kb;
+        public FakeKnowledgeBaseRepo(string kb = "") => _kb = kb;
+        public Task<string> GetKnowledgeBaseAsync() => Task.FromResult(_kb);
     }
 
-    private class TestHttpClientFactory : System.Net.Http.IHttpClientFactory
+    private class FakeOllamaClient : Api.Application.IOllamaClient
     {
-        private readonly HttpClient _client;
-        public TestHttpClientFactory(HttpClient client) => _client = client;
-        public HttpClient CreateClient(string name) => _client;
+        private readonly string _resp;
+        public FakeOllamaClient(string resp) => _resp = resp;
+        public Task<string> GenerateAsync(string endpoint, object payload) => Task.FromResult(_resp);
     }
 
     [Fact]
     public async Task GenerateAnswerAsync_ReturnsPlainText_WhenServiceReturnsPlainText()
     {
         var content = "Plain answer from API";
-        var client = new HttpClient(new FakeHandler(content)) { BaseAddress = new System.Uri("http://localhost") };
-        var factory = new TestHttpClientFactory(client);
+        var kb = new FakeKnowledgeBaseRepo();
+        var client = new FakeOllamaClient(content);
         var opts = Options.Create(new ChatOptions { ClientName = "test", GenerateEndpoint = "/api/generate" });
 
-        var svc = new ChatService(factory, opts);
+        var svc = new ChatService(kb, client, opts);
         var result = await svc.GenerateAnswerAsync("hello");
         Assert.Equal(content, result);
     }
@@ -53,11 +41,11 @@ public class ChatServiceTests
     public async Task GenerateAnswerAsync_ParsesJsonLines_AndReturnsConcatenatedResponses()
     {
         var content = "{ \"response\": \"First\" }\n{ \"response\": \"Second\" }";
-        var client = new HttpClient(new FakeHandler(content)) { BaseAddress = new System.Uri("http://localhost") };
-        var factory = new TestHttpClientFactory(client);
+        var kb = new FakeKnowledgeBaseRepo();
+        var client = new FakeOllamaClient(content);
         var opts = Options.Create(new ChatOptions { ClientName = "test", GenerateEndpoint = "/api/generate" });
 
-        var svc = new ChatService(factory, opts);
+        var svc = new ChatService(kb, client, opts);
         var result = await svc.GenerateAnswerAsync("question");
         Assert.Equal("FirstSecond", result);
     }

@@ -15,11 +15,11 @@ public class ChatService : IChatService
     private readonly ILogger<ChatService> _logger;
 
     private const string SystemPrompt =
-        "You are a Q&A assistant for Pedro Duarte's personal website.\n" +
+        "You are a friendly Q&A assistant for Pedro Duarte's personal website.\n" +
         "Answer ONLY using the KNOWLEDGE BASE provided. Do NOT use external knowledge or make things up.\n" +
         "If the answer is not in the KNOWLEDGE BASE, reply with exactly this sentence and nothing else: " +
         "I couldn't find information to reply to your question.\n" +
-        "Keep answers short and plain text only — no JSON, no markdown, no code blocks.";
+        "Write in natural, friendly sentences — not as bullet points or comma-separated lists. Plain text only, no markdown or JSON.";
 
     public ChatService(IKnowledgeBaseRepository kbRepo, IOllamaClient ollamaClient, Microsoft.Extensions.Options.IOptions<ChatOptions> options, IChatResponseParser parser, ILogger<ChatService> logger)
     {

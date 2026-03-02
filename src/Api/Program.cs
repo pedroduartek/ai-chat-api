@@ -4,13 +4,24 @@ using System.Text.Json;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Primitives;
+using Microsoft.Extensions.Logging;
 
 using Api.Services;
 using Api.Application;
 using Api.Infrastructure;
 using System.Threading;
 
+using Serilog;
+using Polly;
+using Polly.Extensions.Http;
+
 var builder = WebApplication.CreateBuilder(args);
+
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .CreateLogger();
+builder.Host.UseSerilog();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
@@ -66,6 +77,7 @@ builder.Services.Configure<ChatOptions>(options =>
 
 var processorCount = Environment.ProcessorCount;
 var maxConns = Math.Max(4, processorCount * 4);
+// Register HttpClient with a transient-fault-handling policy (Polly)
 builder.Services.AddHttpClient(clientName, c =>
 {
     c.BaseAddress = new Uri(baseUrl);
@@ -73,7 +85,12 @@ builder.Services.AddHttpClient(clientName, c =>
 .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
     MaxConnectionsPerServer = maxConns
-});
+})
+// Add a retry policy for transient errors and non-success responses
+.AddPolicyHandler(HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .OrResult(msg => !msg.IsSuccessStatusCode)
+    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
 ThreadPool.GetMinThreads(out var workerMin, out var compMin);
 var desiredWorker = Math.Max(workerMin, processorCount * 2);
 ThreadPool.SetMinThreads(desiredWorker, compMin);

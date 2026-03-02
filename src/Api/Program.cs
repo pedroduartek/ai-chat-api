@@ -77,7 +77,6 @@ builder.Services.Configure<ChatOptions>(options =>
 
 var processorCount = Environment.ProcessorCount;
 var maxConns = Math.Max(4, processorCount * 4);
-// Register HttpClient with a transient-fault-handling policy (Polly)
 builder.Services.AddHttpClient(clientName, c =>
 {
     c.BaseAddress = new Uri(baseUrl);
@@ -86,7 +85,6 @@ builder.Services.AddHttpClient(clientName, c =>
 {
     MaxConnectionsPerServer = maxConns
 })
-// Add a retry policy for transient errors and non-success responses
 .AddPolicyHandler(HttpPolicyExtensions
     .HandleTransientHttpError()
     .OrResult(msg => !msg.IsSuccessStatusCode)
@@ -97,30 +95,24 @@ ThreadPool.SetMinThreads(desiredWorker, compMin);
 
 builder.Services.AddScoped<IKnowledgeBaseRepository, FileKnowledgeBaseRepository>();
 builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
+builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
 builder.Services.AddScoped<IChatService, ChatService>();
 
 var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
-// Use the application rate limiter configured above. This provides an
-// application-layer protection that complements Cloudflare/Caddy edge rules.
 app.UseRateLimiter();
-// Enable CORS for the configured frontend origins
 app.UseCors("AllowFrontend");
 
 app.MapControllers();
 
-// Local helper: determine the effective client identifier for partitioning limits.
 static string GetClientIdentifier(HttpRequest request)
 {
-    // Prefer API key partitioning if provided
     if (request.Headers.TryGetValue("x-api-key", out var apiKey) && !StringValues.IsNullOrEmpty(apiKey))
-    {
         return $"apiKey:{apiKey.ToString()}";
-    }
 
-    // Cloudflare provides CF-Connecting-IP; Caddy may forward it. Check common headers.
+    // CF-Connecting-IP is set by Cloudflare; X-Real-IP / X-Forwarded-For by Caddy/nginx.
     if (request.Headers.TryGetValue("CF-Connecting-IP", out var cf) && !StringValues.IsNullOrEmpty(cf))
         return cf.ToString();
 

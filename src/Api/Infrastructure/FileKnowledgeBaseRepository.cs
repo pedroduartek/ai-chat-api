@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Infrastructure;
 
@@ -10,6 +11,12 @@ using Api.Application;
 
 public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
 {
+    private readonly ILogger<FileKnowledgeBaseRepository> _logger;
+
+    public FileKnowledgeBaseRepository(ILogger<FileKnowledgeBaseRepository> logger)
+    {
+        _logger = logger;
+    }
     public Task<string> GetKnowledgeBaseAsync()
     {
         try
@@ -33,17 +40,18 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
                         parts.Add(textProp.GetString() ?? string.Empty);
                     }
                 }
-                catch
+                catch (JsonException ex)
                 {
-                    // ignore malformed lines
+                    _logger.LogWarning(ex, "Skipping malformed KB line: {Line}", line);
                 }
             }
 
             var kb = parts.Count > 0 ? string.Join("\n\n", parts) : string.Empty;
             return Task.FromResult(kb);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to load knowledge base from disk");
             return Task.FromResult(string.Empty);
         }
     }

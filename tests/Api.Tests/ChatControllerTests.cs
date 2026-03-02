@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Api.Controllers;
 using Api.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -10,7 +11,7 @@ namespace Api.Tests;
 public class ChatControllerTests
 {
     private static ChatController BuildController(Mock<Api.Services.IChatService> svcMock)
-        => new ChatController(svcMock.Object);
+        => new ChatController(svcMock.Object, NullLogger<ChatController>.Instance);
 
     [Fact]
     public async Task Post_ReturnsBadRequest_WhenMessageMissing()
@@ -65,8 +66,6 @@ public class ChatControllerTests
     [Fact]
     public async Task Post_ThrowsException_WhenServiceThrows()
     {
-        // Controller has no try/catch — exceptions from the service propagate
-        // and the ASP.NET exception middleware returns 500. Verify it is not swallowed.
         var svcMock = new Mock<Api.Services.IChatService>();
         svcMock.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>()))
                .ThrowsAsync(new System.Net.Http.HttpRequestException("Ollama returned non-success status 503"));

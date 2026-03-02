@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -39,10 +40,8 @@ public class ChatServiceTests
     private static ChatService BuildService(string ollamaResponse, string kb = "")
     {
         var opts = Options.Create(new ChatOptions { ClientName = "test", GenerateEndpoint = "/api/generate" });
-        return new ChatService(new FakeKnowledgeBaseRepo(kb), new FakeOllamaClient(ollamaResponse), opts);
+        return new ChatService(new FakeKnowledgeBaseRepo(kb), new FakeOllamaClient(ollamaResponse), opts, new ChatResponseParser(), NullLogger<ChatService>.Instance);
     }
-
-    // ── Plain text ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task GenerateAnswerAsync_ReturnsPlainText_WhenServiceReturnsPlainText()
@@ -67,8 +66,6 @@ public class ChatServiceTests
         var result = await svc.GenerateAnswerAsync("question");
         Assert.Equal("Answer without KB context", result);
     }
-
-    // ── JSON NDJSON parsing ─────────────────────────────────────────────────
 
     [Fact]
     public async Task GenerateAnswerAsync_ParsesJsonLines_AndReturnsConcatenatedResponses()
@@ -115,8 +112,6 @@ public class ChatServiceTests
         Assert.Equal("Chat message content", result);
     }
 
-    // ── Fallback phrase ─────────────────────────────────────────────────────
-
     [Fact]
     public async Task GenerateAnswerAsync_ReturnsFallback_WhenResponseContainsFallbackPhrase()
     {
@@ -127,8 +122,6 @@ public class ChatServiceTests
         Assert.Equal(fallback, result);
     }
 
-    // ── Error propagation ───────────────────────────────────────────────────
-
     [Fact]
     public async Task GenerateAnswerAsync_ThrowsHttpRequestException_WhenOllamaClientThrows()
     {
@@ -136,7 +129,9 @@ public class ChatServiceTests
         var svc = new ChatService(
             new FakeKnowledgeBaseRepo(),
             new ThrowingOllamaClient(new HttpRequestException("Ollama returned non-success status 503")),
-            opts);
+            opts,
+            new ChatResponseParser(),
+            NullLogger<ChatService>.Instance);
 
         await Assert.ThrowsAsync<HttpRequestException>(() => svc.GenerateAnswerAsync("hello"));
     }
@@ -148,7 +143,9 @@ public class ChatServiceTests
         var svc = new ChatService(
             new ThrowingKbRepo(),
             new FakeOllamaClient("answer"),
-            opts);
+            opts,
+            new ChatResponseParser(),
+            NullLogger<ChatService>.Instance);
 
         await Assert.ThrowsAsync<System.IO.IOException>(() => svc.GenerateAnswerAsync("hello"));
     }

@@ -1,8 +1,6 @@
-using System.Net.Http.Json;
-using System.Text;
-using System.Text.Json;
 using Api.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers;
 
@@ -11,10 +9,12 @@ namespace Api.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly Api.Services.IChatService _chatService;
+    private readonly ILogger<ChatController> _logger;
 
-    public ChatController(Api.Services.IChatService chatService)
+    public ChatController(Api.Services.IChatService chatService, ILogger<ChatController> logger)
     {
         _chatService = chatService;
+        _logger = logger;
     }
 
     [HttpPost("chat")]
@@ -23,6 +23,7 @@ public class ChatController : ControllerBase
         var messageText = req?.Message;
         if (string.IsNullOrWhiteSpace(messageText))
         {
+            _logger.LogWarning("Rejected chat request: missing or empty message");
             return BadRequest(new { error = "message required" });
         }
 

@@ -35,7 +35,7 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
         if (entries.Count == 0)
             return Task.FromResult(string.Empty);
 
-        var queryTokens = Tokenize(query);
+        var queryTokens = ExpandWithSynonyms(Tokenize(query));
         var matched = entries
             .Where(e => EntrySearchTokens(e).Any(k => queryTokens.Contains(k)))
             .ToList();
@@ -116,6 +116,53 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
                 ? e.Text
                 : $"[{e.Title}] {e.Text}");
         return string.Join("\n\n", parts);
+    }
+
+    private static readonly Dictionary<string, string[]> _synonyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["hobby"]          = ["hobbies", "interest", "interests", "passion", "passions"],
+        ["hobbies"]        = ["hobby", "interest", "interests", "passion"],
+        ["interest"]       = ["hobbies", "hobby", "passion"],
+        ["interests"]      = ["hobbies", "hobby"],
+        ["passion"]        = ["hobbies", "hobby", "interests"],
+        ["passions"]       = ["hobbies", "hobby"],
+        ["achievement"]    = ["achievements", "accomplishment", "accomplishments"],
+        ["achievements"]   = ["achievement", "accomplishment", "accomplishments"],
+        ["accomplishment"] = ["achievements", "achievement"],
+        ["accomplish"]     = ["achievements", "achievement"],
+        ["resume"]         = ["cv", "curriculum"],
+        ["curriculum"]     = ["cv", "resume"],
+        ["degree"]         = ["education", "university", "school"],
+        ["university"]     = ["education", "degree", "school", "polytechnic"],
+        ["school"]         = ["education", "degree", "university"],
+        ["college"]        = ["education", "degree", "university"],
+        ["studied"]        = ["education"],
+        ["study"]          = ["education"],
+        ["project"]        = ["projects"],
+        ["projects"]       = ["project"],
+        ["company"]        = ["companies", "employer", "experience"],
+        ["companies"]      = ["company", "employer"],
+        ["employer"]       = ["companies", "company", "experience"],
+        ["live"]           = ["location", "lisbon"],
+        ["lives"]          = ["location", "lisbon"],
+        ["from"]           = ["location"],
+        ["contact"]        = ["email", "linkedin", "github", "reach"],
+        ["reach"]          = ["contact", "email"],
+        ["hire"]           = ["contact", "email", "linkedin"],
+        ["philosophy"]     = ["values", "beliefs", "mindset", "approach"],
+        ["values"]         = ["philosophy", "beliefs"],
+        ["believes"]       = ["philosophy", "values"],
+        ["opinion"]        = ["philosophy", "values"],
+    };
+
+    private static HashSet<string> ExpandWithSynonyms(HashSet<string> tokens)
+    {
+        var expanded = new HashSet<string>(tokens, StringComparer.OrdinalIgnoreCase);
+        foreach (var token in tokens)
+            if (_synonyms.TryGetValue(token, out var synonyms))
+                foreach (var s in synonyms)
+                    expanded.Add(s);
+        return expanded;
     }
 
     private static HashSet<string> Tokenize(string text)

@@ -41,9 +41,13 @@ public class ChatService : IChatService
         var sb = new StringBuilder();
         sb.AppendLine(SystemPrompt);
         sb.AppendLine();
-        var kb = await _kbRepo.GetKnowledgeBaseAsync();
+        var kb = await _kbRepo.GetRelevantKnowledgeBaseAsync(message);
         if (!string.IsNullOrWhiteSpace(kb))
+        {
+            sb.AppendLine("KNOWLEDGE BASE:");
             sb.AppendLine(kb);
+            sb.AppendLine("END OF KNOWLEDGE BASE");
+        }
         sb.AppendLine();
         sb.Append("User question: ");
         sb.AppendLine(message);

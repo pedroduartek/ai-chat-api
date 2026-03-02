@@ -16,11 +16,13 @@ public class ChatServiceTests
         private readonly string _kb;
         public FakeKnowledgeBaseRepo(string kb = "") => _kb = kb;
         public Task<string> GetKnowledgeBaseAsync() => Task.FromResult(_kb);
+        public Task<string> GetRelevantKnowledgeBaseAsync(string query) => Task.FromResult(_kb);
     }
 
     private class ThrowingKbRepo : Api.Application.IKnowledgeBaseRepository
     {
         public Task<string> GetKnowledgeBaseAsync() => Task.FromException<string>(new System.IO.IOException("KB file not found"));
+        public Task<string> GetRelevantKnowledgeBaseAsync(string query) => Task.FromException<string>(new System.IO.IOException("KB file not found"));
     }
 
     private class FakeOllamaClient : Api.Application.IOllamaClient

@@ -1,11 +1,25 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Api.Services;
 
-public sealed class ChatResponseParser : IChatResponseParser
+public sealed partial class ChatResponseParser : IChatResponseParser
 {
     public const string Fallback = "I couldn't find information on this website to reply to your question.";
+
+    // Patterns that indicate the model tried to refuse but didn't use the exact fallback.
+    // When matched, the response is replaced with the canonical Fallback string.
+    [GeneratedRegex(
+        @"(I\s+(couldn't|could\s+not|can't|cannot|don't|do\s+not|wasn't able to)\s+find\s+(any\s+)?information)" +
+        @"|(I\s+shouldn't\s+have)" +
+        @"|(my\s+previous\s+response)" +
+        @"|(I\s+don't\s+have\s+(enough\s+)?(information|context|data))" +
+        @"|(not\s+(available|found|mentioned)\s+(in|on)\s+(the|this)\s+(website|KB|knowledge))" +
+        @"|(there\s+is\s+no\s+(information|mention|data)\s+(about|on|regarding))",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex HallucinatedRefusalPattern();
 
     public string Parse(string rawResponse)
     {
@@ -120,6 +134,19 @@ public sealed class ChatResponseParser : IChatResponseParser
     {
         if (string.IsNullOrEmpty(txt)) return string.Empty;
         if (txt.Contains(Fallback, StringComparison.Ordinal)) return Fallback;
+
+        // Catch hallucinated refusals that don't match the exact fallback string.
+        try
+        {
+            if (HallucinatedRefusalPattern().IsMatch(txt))
+                return Fallback;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // Treat timeout on adversarial output as a refusal to be safe.
+            return Fallback;
+        }
+
         return txt;
     }
 }

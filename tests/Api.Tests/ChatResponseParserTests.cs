@@ -100,4 +100,36 @@ public class ChatResponseParserTests
     [Fact]
     public void Parse_HandlesMultilineJsonLines_WithBlankLines()
         => Assert.Equal("Hello", Parser.Parse("{\"response\":\"Hello\"}\n\n"));
+
+    // ── Hallucinated-refusal guardrail tests ────────────────────────────────
+
+    [Theory]
+    [InlineData("I couldn't find any information on Pedro Duarte's personal preferences or hobbies, including whether he likes potatoes.")]
+    [InlineData("I could not find information about that topic on this website.")]
+    [InlineData("I can't find any information about Pedro's favourite food.")]
+    [InlineData("I don't have enough information to answer that.")]
+    [InlineData("I don't have enough context to respond.")]
+    [InlineData("I don't have information about that.")]
+    [InlineData("That is not mentioned on the website content.")]
+    [InlineData("There is no information about potatoes on this website.")]
+    [InlineData("There is no mention regarding that topic.")]
+    [InlineData("I shouldn't have asked about food without having more context.")]
+    [InlineData("My previous response was about something else.")]
+    [InlineData("That is not available in the knowledge base.")]
+    [InlineData("That is not found on this website content.")]
+    public void Parse_NormalisesHallucinatedRefusal_ToCanonicalFallback(string hallucinatedRefusal)
+    {
+        var input = $"{{\"message\":{{\"role\":\"assistant\",\"content\":\"{hallucinatedRefusal.Replace("\"", "\\\"")}\"}}}}";
+        Assert.Equal(ChatResponseParser.Fallback, Parser.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("Pedro is a Senior Software Engineer based in Lisbon.")]
+    [InlineData("Pedro has 5+ years of experience in backend systems.")]
+    [InlineData("His hobbies include fishing, motorcycle riding, and cooking.")]
+    public void Parse_DoesNotReplace_LegitimateAnswers(string legitimateAnswer)
+    {
+        var input = $"{{\"message\":{{\"role\":\"assistant\",\"content\":\"{legitimateAnswer}\"}}}}";
+        Assert.Equal(legitimateAnswer, Parser.Parse(input));
+    }
 }

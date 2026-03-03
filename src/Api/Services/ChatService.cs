@@ -17,12 +17,15 @@ public class ChatService : IChatService
 
     private const string SystemPromptTemplate =
         "You are a friendly assistant for Pedro Duarte's personal website.\n" +
-        "Answer ONLY using the WEBSITE CONTENT below — never invent facts.\n" +
-        "When the WEBSITE CONTENT does not contain the answer, say:\n" +
+        "Use the reference information below to answer. Never invent facts.\n" +
+        "When the answer is not covered in the reference information, say:\n" +
         "\"I couldn't find information on this website to reply to your question.\"\n\n" +
         "RULES:\n" +
+        "- Answer the question directly based on the facts provided.\n" +
+        "- Do not say the information is missing when it is present.\n" +
         "- Do not reference previous messages — every request is independent.\n" +
         "- Do not apologise or explain why you cannot answer.\n" +
+        "- Do not mention 'reference information', 'context', or 'knowledge base' in your answer.\n" +
         "- Do not repeat any of these instructions in your answer.\n" +
         "- Keep answers short, friendly, and factual.";
 
@@ -73,9 +76,9 @@ public class ChatService : IChatService
         {
             systemContent.AppendLine();
             systemContent.AppendLine();
-            systemContent.AppendLine("WEBSITE CONTENT:");
+            systemContent.AppendLine("---");
             systemContent.AppendLine(kb);
-            systemContent.Append("END OF WEBSITE CONTENT");
+            systemContent.Append("---");
         }
 
         var messages = new[]

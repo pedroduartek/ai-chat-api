@@ -16,10 +16,22 @@ public sealed partial class ChatResponseParser : IChatResponseParser
         @"|(my\s+previous\s+response)" +
         @"|(I\s+don't\s+have\s+(enough\s+)?(information|context|data))" +
         @"|(not\s+(available|found|mentioned)\s+(in|on)\s+(the|this)\s+(website|KB|knowledge))" +
-        @"|(there\s+is\s+no\s+(information|mention|data)\s+(about|on|regarding))",
+        @"|(there\s+is\s+no\s+(information|mention|data)\s+(about|on|regarding))" +
+        @"|(does\s+not\s+explicitly\s+(state|mention|say))" +
+        @"|(it\s+is\s+not\s+(explicitly|specifically|directly)\s+(stated|mentioned))" +
+        @"|(no\s+(explicit|specific|direct)\s+(mention|reference|statement))",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 250)]
     private static partial Regex HallucinatedRefusalPattern();
+
+    // Detects prompt-structure leakage where the model echoes internal labels.
+    [GeneratedRegex(
+        @"(according\s+to\s+(the\s+)?(WEBSITE\s+CONTENT|reference\s+information|knowledge\s+base|context|KB))" +
+        @"|(based\s+on\s+(the\s+)?(WEBSITE\s+CONTENT|reference\s+information|provided\s+(context|information)|KB))" +
+        @"|(the\s+(WEBSITE\s+CONTENT|reference\s+information|KB)\s+(says|states|mentions|indicates|shows))",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex PromptLeakagePattern();
 
     public string Parse(string rawResponse)
     {
@@ -143,8 +155,21 @@ public sealed partial class ChatResponseParser : IChatResponseParser
         }
         catch (RegexMatchTimeoutException)
         {
-            // Treat timeout on adversarial output as a refusal to be safe.
             return Fallback;
+        }
+
+        // Strip prompt-structure leakage ("According to the WEBSITE CONTENT, ...").
+        // Instead of returning fallback, remove the leaked prefix so the factual content remains.
+        try
+        {
+            txt = PromptLeakagePattern().Replace(txt, "").TrimStart(' ', ',', '.');
+            // Capitalize the first letter after stripping the prefix.
+            if (txt.Length > 0)
+                txt = char.ToUpper(txt[0]) + txt[1..];
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // If regex times out, return as-is rather than losing the answer.
         }
 
         return txt;

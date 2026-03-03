@@ -117,16 +117,45 @@ public class ChatResponseParserTests
     [InlineData("My previous response was about something else.")]
     [InlineData("That is not available in the knowledge base.")]
     [InlineData("That is not found on this website content.")]
+    [InlineData("However, it does not explicitly state that he programs in C#.")]
+    [InlineData("It is not explicitly mentioned in the provided information.")]
+    [InlineData("There is no explicit mention of that topic.")]
+    [InlineData("The website does not explicitly say whether he works out.")]
     public void Parse_NormalisesHallucinatedRefusal_ToCanonicalFallback(string hallucinatedRefusal)
     {
         var input = $"{{\"message\":{{\"role\":\"assistant\",\"content\":\"{hallucinatedRefusal.Replace("\"", "\\\"")}\"}}}}";
         Assert.Equal(ChatResponseParser.Fallback, Parser.Parse(input));
     }
 
+    // ── Prompt-leakage stripping tests ──────────────────────────────────────
+
+    [Theory]
+    [InlineData(
+        "According to the WEBSITE CONTENT, Pedro is a Senior Software Engineer.",
+        "Pedro is a Senior Software Engineer.")]
+    [InlineData(
+        "Based on the reference information, Pedro has 5+ years of experience.",
+        "Pedro has 5+ years of experience.")]
+    [InlineData(
+        "The WEBSITE CONTENT says Pedro is based in Lisbon.",
+        "Pedro is based in Lisbon.")]
+    [InlineData(
+        "Based on the provided context, his skills include C# and .NET.",
+        "His skills include C# and .NET.")]
+    [InlineData(
+        "According to the knowledge base, Pedro enjoys fishing.",
+        "Pedro enjoys fishing.")]
+    public void Parse_StripsPromptLeakage_KeepsFactualContent(string leakyAnswer, string expected)
+    {
+        var input = $"{{\"message\":{{\"role\":\"assistant\",\"content\":\"{leakyAnswer.Replace("\"", "\\\"")}\"}}}}";
+        Assert.Equal(expected, Parser.Parse(input));
+    }
+
     [Theory]
     [InlineData("Pedro is a Senior Software Engineer based in Lisbon.")]
     [InlineData("Pedro has 5+ years of experience in backend systems.")]
     [InlineData("His hobbies include fishing, motorcycle riding, and cooking.")]
+    [InlineData("Yes! Pedro programs in C# and has 5+ years of experience with .NET.")]
     public void Parse_DoesNotReplace_LegitimateAnswers(string legitimateAnswer)
     {
         var input = $"{{\"message\":{{\"role\":\"assistant\",\"content\":\"{legitimateAnswer}\"}}}}";

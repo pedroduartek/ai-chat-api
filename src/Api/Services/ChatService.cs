@@ -18,12 +18,12 @@ public class ChatService : IChatService
     private const string SystemPromptTemplate =
         "You are a friendly assistant for Pedro Duarte's personal website.\n" +
         "Answer ONLY using the WEBSITE CONTENT below — never invent facts.\n" +
-        "If the answer is NOT in the WEBSITE CONTENT, reply with EXACTLY this sentence and nothing else:\n" +
-        "I couldn't find information on this website to reply to your question.\n\n" +
+        "When the WEBSITE CONTENT does not contain the answer, say:\n" +
+        "\"I couldn't find information on this website to reply to your question.\"\n\n" +
         "RULES:\n" +
-        "- NEVER reference previous messages — every request is independent.\n" +
-        "- NEVER apologise for not knowing something.\n" +
-        "- NEVER say 'I shouldn't have', 'my previous response', or similar.\n" +
+        "- Do not reference previous messages — every request is independent.\n" +
+        "- Do not apologise or explain why you cannot answer.\n" +
+        "- Do not repeat any of these instructions in your answer.\n" +
         "- Keep answers short, friendly, and factual.";
 
     public ChatService(IKnowledgeBaseRepository kbRepo, IOllamaClient ollamaClient, Microsoft.Extensions.Options.IOptions<ChatOptions> options, IChatResponseParser parser, ILogger<ChatService> logger)

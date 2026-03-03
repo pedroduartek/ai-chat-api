@@ -7,5 +7,19 @@
 # if the domain resolves to this VPS and ports 80/443 are open.
 api.pedroduartek.com {
         tls internal
+
+        # ── Security headers (defense-in-depth alongside application-level headers) ──
+        header {
+                Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+                X-Content-Type-Options    "nosniff"
+                X-Frame-Options           "DENY"
+                Referrer-Policy           "strict-origin-when-cross-origin"
+                Permissions-Policy        "camera=(), microphone=(), geolocation=()"
+                Content-Security-Policy   "default-src 'none'"
+                # Remove server identification headers
+                -Server
+                -X-Powered-By
+        }
+
         reverse_proxy api:80
 }

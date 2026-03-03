@@ -1,0 +1,28 @@
+# Ignore version control
+.git
+.gitignore
+
+# Ignore build outputs — these are rebuilt inside the container
+**/bin/
+**/obj/
+
+# Ignore IDE / editor files
+.vs/
+.vscode/
+*.sln
+*.user
+*.suo
+
+# Ignore docs, infra, tests — not needed in the API image
+docs/
+infra/
+tests/
+README.md
+LICENSE
+deploy.sh
+watch_and_deploy.sh
+
+# Ignore Docker-related files to avoid recursive context copies
+**/Dockerfile*
+**/docker-compose*
+**/.dockerignore

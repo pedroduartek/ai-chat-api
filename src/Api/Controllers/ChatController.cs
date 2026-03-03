@@ -1,4 +1,5 @@
 using Api.Models;
+using Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -35,6 +36,12 @@ public class ChatController : ControllerBase
             return BadRequest(new { error = $"message must be {MaxMessageLength} characters or fewer" });
         }
 
+        if (InputSanitizer.ContainsInjection(messageText))
+        {
+            _logger.LogWarning("Rejected chat request: prompt injection detected");
+            return BadRequest(new { error = "Your message contains disallowed content." });
+        }
+
         var finalAnswer = await _chatService.GenerateAnswerAsync(messageText!);
         return new JsonResult(new { answer = finalAnswer });
     }
@@ -54,6 +61,13 @@ public class ChatController : ControllerBase
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
             await Response.WriteAsync($"{{\"error\":\"message must be {MaxMessageLength} characters or fewer\"}}");
+            return;
+        }
+
+        if (InputSanitizer.ContainsInjection(messageText))
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsync("{\"error\":\"Your message contains disallowed content.\"}");
             return;
         }
 

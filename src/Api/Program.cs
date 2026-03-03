@@ -93,6 +93,9 @@ ThreadPool.GetMinThreads(out var workerMin, out var compMin);
 var desiredWorker = Math.Max(workerMin, processorCount * 2);
 ThreadPool.SetMinThreads(desiredWorker, compMin);
 
+// Limit request body size to 1 MB to prevent oversized payloads before model binding.
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 1_048_576);
+
 builder.Services.AddSingleton<IKnowledgeBaseRepository, FileKnowledgeBaseRepository>();
 builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
 builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
@@ -100,10 +103,26 @@ builder.Services.AddScoped<IChatService, ChatService>();
 
 var app = builder.Build();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// Only expose Swagger in development — leaking the API schema in production is an information-disclosure risk.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
 app.UseRateLimiter();
 app.UseCors("AllowFrontend");
+
+// Security headers middleware — defense-in-depth alongside Caddy-level headers.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
 
 // Global exception handler — returns structured JSON errors instead of raw exceptions.
 app.UseExceptionHandler(errorApp =>
@@ -123,19 +142,15 @@ static string GetClientIdentifier(HttpRequest request)
     if (request.Headers.TryGetValue("x-api-key", out var apiKey) && !StringValues.IsNullOrEmpty(apiKey))
         return $"apiKey:{apiKey.ToString()}";
 
-    // CF-Connecting-IP is set by Cloudflare; X-Real-IP / X-Forwarded-For by Caddy/nginx.
+    // When behind Cloudflare, CF-Connecting-IP is the ONLY trustworthy client-IP header.
+    // Cloudflare always overwrites it with the true visitor IP and strips spoofed values.
+    // We intentionally do NOT fall back to X-Forwarded-For / X-Real-IP because those can
+    // be trivially spoofed by an attacker to obtain a fresh rate-limit bucket.
     if (request.Headers.TryGetValue("CF-Connecting-IP", out var cf) && !StringValues.IsNullOrEmpty(cf))
         return cf.ToString();
 
-    if (request.Headers.TryGetValue("X-Real-IP", out var xr) && !StringValues.IsNullOrEmpty(xr))
-        return xr.ToString();
-
-    if (request.Headers.TryGetValue("X-Forwarded-For", out var xff) && !StringValues.IsNullOrEmpty(xff))
-    {
-        var first = xff.ToString().Split(',')[0].Trim();
-        if (!string.IsNullOrEmpty(first)) return first;
-    }
-
+    // Fallback: use the direct connection IP (correct when Cloudflare is not in the path,
+    // e.g. during local development or direct VPS access).
     return request.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 }
 

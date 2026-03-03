@@ -13,7 +13,7 @@ FROM base AS final
 WORKDIR /app
 
 # Run as non-root user — limits blast radius if the container is compromised.
-RUN adduser --disabled-password --no-create-home --gecos "" appuser
+RUN useradd --no-create-home --shell /bin/false appuser
 USER appuser
 
 COPY --from=build /app/publish .

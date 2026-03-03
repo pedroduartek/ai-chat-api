@@ -12,14 +12,36 @@ using Api.Infrastructure;
 using System.Threading;
 
 using Serilog;
+using Serilog.Sinks.Grafana.Loki;
 using Polly;
 using Polly.Extensions.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .CreateLogger();
+var loggerConfig = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration);
+
+var lokiUrl = builder.Configuration["GRAFANA_LOKI_URL"];
+var lokiUser = builder.Configuration["GRAFANA_LOKI_USER"];
+var lokiApiKey = builder.Configuration["GRAFANA_LOKI_API_KEY"];
+
+if (!string.IsNullOrEmpty(lokiUrl) && !string.IsNullOrEmpty(lokiUser) && !string.IsNullOrEmpty(lokiApiKey))
+{
+    loggerConfig = loggerConfig.WriteTo.GrafanaLoki(
+        lokiUrl,
+        labels: new[]
+        {
+            new LokiLabel { Key = "app", Value = "ai-chat-api" },
+            new LokiLabel { Key = "env", Value = builder.Environment.EnvironmentName }
+        },
+        credentials: new LokiCredentials
+        {
+            Login = lokiUser,
+            Password = lokiApiKey
+        });
+}
+
+Log.Logger = loggerConfig.CreateLogger();
 builder.Host.UseSerilog();
 
 builder.Services.AddEndpointsApiExplorer();

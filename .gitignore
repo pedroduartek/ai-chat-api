@@ -5,4 +5,4 @@ obj/
 .DS_Store
 env/
 node_modules/
-infra/docker/.env.example
+infra/docker/.env

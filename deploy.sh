@@ -24,8 +24,8 @@ fi
 echo "Resetting local branch to origin/$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-echo "Removing untracked files and directories"
-git clean -fd
+echo "Removing untracked files and directories (preserving infra/docker/.env)"
+git clean -fd -e "infra/docker/.env"
 
 echo "Fetching completed. Local repo now matches origin/$BRANCH."
 

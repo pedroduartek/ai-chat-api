@@ -26,10 +26,20 @@ while true; do
     continue
   fi
 
+
+  # Stash infra/docker/.env if it exists before fetch/reset
+  if [ -f "infra/docker/.env" ]; then
+    cp infra/docker/.env /tmp/.env.stash.$$ || true
+  fi
+
   # fetch remote updates for this branch
   if ! git fetch origin "$BRANCH" >/dev/null 2>&1; then
     printf "\n"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - git fetch failed for branch $BRANCH; sleeping"
+    # Restore .env if it was stashed
+    if [ -f /tmp/.env.stash.$$ ]; then
+      mv /tmp/.env.stash.$$ infra/docker/.env
+    fi
     sleep "$SLEEP_SECONDS"
     continue
   fi
@@ -38,6 +48,10 @@ while true; do
   behind=$(git rev-list --count HEAD..origin/"$BRANCH" 2>/dev/null || echo 0)
 
   if [ "${behind:-0}" -gt 0 ]; then
+    # Restore .env if it was stashed before deploy
+    if [ -f /tmp/.env.stash.$$ ]; then
+      mv /tmp/.env.stash.$$ infra/docker/.env
+    fi
     # print a newline to finalize the inline status line, then log and run deploy
     printf "\n"
     echo "$(date +'%Y-%m-%d %H:%M:%S') - Branch $BRANCH is behind origin/$BRANCH by $behind commit(s) — running deploy"

@@ -10,6 +10,13 @@ echo "Checking prerequisites..."
 command -v git >/dev/null 2>&1 || { echo "Git not found in PATH. Install Git or add it to PATH." >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || { echo "Docker not found in PATH. Install Docker or add it to PATH." >&2; exit 1; }
 
+
+# Stash infra/docker/.env if it exists
+if [[ -f "infra/docker/.env" ]]; then
+  echo "Stashing infra/docker/.env before git operations..."
+  cp infra/docker/.env /tmp/.env.stash.$$ || true
+fi
+
 echo "Fetching latest code from origin and discarding local changes (branch: $BRANCH)..."
 git fetch origin --prune
 
@@ -26,6 +33,12 @@ git reset --hard "origin/$BRANCH"
 
 echo "Removing untracked files and directories (preserving infra/docker/.env)"
 git clean -fd -e "infra/docker/.env"
+
+# Restore infra/docker/.env if it was stashed
+if [[ -f /tmp/.env.stash.$$ ]]; then
+  echo "Restoring infra/docker/.env after git operations..."
+  mv /tmp/.env.stash.$$ infra/docker/.env
+fi
 
 echo "Fetching completed. Local repo now matches origin/$BRANCH."
 

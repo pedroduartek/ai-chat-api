@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 
 using Api.Application;
 using Microsoft.Extensions.Logging;
@@ -14,15 +15,11 @@ public class ChatService : IChatService
     private readonly IChatResponseParser _parser;
     private readonly ILogger<ChatService> _logger;
 
-    private const string SystemPrompt =
-        "You are a friendly Q&A assistant for Pedro Duarte's personal website.\n" +
-        "Answer ONLY using the WEBSITE CONTENT provided below. Do NOT use external knowledge or make things up.\n" +
-        "If the answer is not in the WEBSITE CONTENT, reply with exactly this sentence and nothing else: " +
+    private const string SystemPromptTemplate =
+        "You are a friendly assistant for Pedro Duarte's personal website.\n" +
+        "Answer ONLY from the WEBSITE CONTENT below. If unsure, say exactly: " +
         "I couldn't find information on this website to reply to your question.\n" +
-        "NEVER answer questions about politics, religion, or personal beliefs unless explicitly stated in the WEBSITE CONTENT. " +
-        "For such questions, always use the fallback response above.\n" +
-        "Never mention 'knowledge base' or 'website content' in your responses — speak naturally as if you know Pedro's website.\n" +
-        "Write in natural, friendly sentences — not as bullet points or comma-separated lists. Plain text only, no markdown or JSON.";
+        "Speak naturally as if you know Pedro's website. Use plain, friendly sentences.";
 
     public ChatService(IKnowledgeBaseRepository kbRepo, IOllamaClient ollamaClient, Microsoft.Extensions.Options.IOptions<ChatOptions> options, IChatResponseParser parser, ILogger<ChatService> logger)
     {
@@ -43,27 +40,59 @@ public class ChatService : IChatService
         return answer;
     }
 
+    public async IAsyncEnumerable<string> StreamAnswerAsync(string message, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Streaming answer for message of length {Length}", message.Length);
+        var payload = await BuildPayload(message, stream: true);
+
+        await foreach (var token in _ollamaClient.StreamAsync(_options.ChatEndpoint, payload, cancellationToken))
+        {
+            yield return token;
+        }
+    }
+
     private async Task<string> SendMessage(string message)
     {
-        var model = "llama3.2:1b";
-        var sb = new StringBuilder();
-        sb.AppendLine(SystemPrompt);
-        sb.AppendLine();
-        var kb = await _kbRepo.GetRelevantKnowledgeBaseAsync(message);
+        var payload = await BuildPayload(message, stream: false);
+        var content = await _ollamaClient.GenerateAsync(_options.ChatEndpoint, payload);
+        return content;
+    }
+
+    private async Task<object> BuildPayload(string message, bool stream)
+    {
+        var kb = await _kbRepo.GetKnowledgeBaseAsync();
+
+        var systemContent = new StringBuilder();
+        systemContent.Append(SystemPromptTemplate);
         if (!string.IsNullOrWhiteSpace(kb))
         {
-            sb.AppendLine("WEBSITE CONTENT:");
-            sb.AppendLine(kb);
-            sb.AppendLine("END OF WEBSITE CONTENT");
+            systemContent.AppendLine();
+            systemContent.AppendLine();
+            systemContent.AppendLine("WEBSITE CONTENT:");
+            systemContent.AppendLine(kb);
+            systemContent.Append("END OF WEBSITE CONTENT");
         }
-        sb.AppendLine();
-        sb.Append("User question: ");
-        sb.AppendLine(message);
-        sb.AppendLine();
-        sb.Append("Answer:");
 
-        var payload = new { model, prompt = sb.ToString(), stream = false };
-        var content = await _ollamaClient.GenerateAsync(_options.GenerateEndpoint, payload);
-        return content;
+        var messages = new[]
+        {
+            new { role = "system", content = systemContent.ToString() },
+            new { role = "user", content = message }
+        };
+
+        return new
+        {
+            model = _options.Model,
+            messages,
+            stream,
+            options = new
+            {
+                temperature = _options.Temperature,
+                top_p = _options.TopP,
+                top_k = _options.TopK,
+                repeat_penalty = _options.RepeatPenalty,
+                num_predict = _options.NumPredict,
+                num_ctx = _options.NumCtx
+            }
+        };
     }
 }

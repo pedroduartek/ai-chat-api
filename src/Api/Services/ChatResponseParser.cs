@@ -26,6 +26,13 @@ public sealed class ChatResponseParser : IChatResponseParser
             if (root.ValueKind != JsonValueKind.Object)
                 return null;
 
+            // Ollama /api/chat format: { "message": { "role": "assistant", "content": "..." } }
+            if (root.TryGetProperty("message", out var msgRoot) &&
+                msgRoot.ValueKind == JsonValueKind.Object &&
+                msgRoot.TryGetProperty("content", out var msgContent) &&
+                msgContent.ValueKind == JsonValueKind.String)
+                return Normalize(msgContent.GetString() ?? string.Empty);
+
             if (root.TryGetProperty("text", out var textProp) && textProp.ValueKind == JsonValueKind.String)
                 return Normalize(textProp.GetString() ?? string.Empty);
 

@@ -13,6 +13,8 @@ using Api.Application;
 public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
 {
     private readonly ILogger<FileKnowledgeBaseRepository> _logger;
+    private readonly Lazy<List<KbEntry>> _cachedEntries;
+    private string? _cachedFormatted;
 
     // Entry IDs that contain meta-instructions rather than factual content.
     // These are already covered by the system prompt and should not be injected into the KB block.
@@ -21,17 +23,18 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
     public FileKnowledgeBaseRepository(ILogger<FileKnowledgeBaseRepository> logger)
     {
         _logger = logger;
+        _cachedEntries = new Lazy<List<KbEntry>>(LoadEntries);
     }
 
     public Task<string> GetKnowledgeBaseAsync()
     {
-        var entries = LoadEntries();
-        return Task.FromResult(FormatEntries(entries));
+        _cachedFormatted ??= FormatEntries(_cachedEntries.Value);
+        return Task.FromResult(_cachedFormatted);
     }
 
     public Task<string> GetRelevantKnowledgeBaseAsync(string query)
     {
-        var entries = LoadEntries();
+        var entries = _cachedEntries.Value;
         if (entries.Count == 0)
             return Task.FromResult(string.Empty);
 
@@ -51,7 +54,7 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
 
     // ── helpers ────────────────────────────────────────────────────────────────
 
-    private sealed record KbEntry(string Id, string Title, string Text, IReadOnlyList<string> Keywords);
+    internal sealed record KbEntry(string Id, string Title, string Text, IReadOnlyList<string> Keywords);
 
     private List<KbEntry> LoadEntries()
     {

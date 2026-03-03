@@ -48,6 +48,19 @@ public class ChatControllerTests
     }
 
     [Fact]
+    public async Task Post_ReturnsBadRequest_WhenMessageExceedsMaxLength()
+    {
+        var svcMock = new Mock<Api.Services.IChatService>();
+        var controller = BuildController(svcMock);
+        var longMessage = new string('a', 501);
+
+        var result = await controller.Post(new ChatRequest { Message = longMessage });
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        svcMock.Verify(s => s.GenerateAnswerAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Post_ReturnsJsonResult_WithAnswer()
     {
         var svcMock = new Mock<Api.Services.IChatService>();
@@ -61,6 +74,20 @@ public class ChatControllerTests
         var prop = valType.GetProperty("answer");
         Assert.NotNull(prop);
         Assert.Equal("the-answer", prop.GetValue(jr.Value));
+    }
+
+    [Fact]
+    public async Task Post_AcceptsMessage_AtExactMaxLength()
+    {
+        var svcMock = new Mock<Api.Services.IChatService>();
+        svcMock.Setup(s => s.GenerateAnswerAsync(It.IsAny<string>())).ReturnsAsync("ok");
+        var controller = BuildController(svcMock);
+        var exactMessage = new string('a', 500);
+
+        var result = await controller.Post(new ChatRequest { Message = exactMessage });
+
+        Assert.IsType<JsonResult>(result);
+        svcMock.Verify(s => s.GenerateAnswerAsync(exactMessage), Times.Once);
     }
 
     [Fact]

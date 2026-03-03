@@ -93,7 +93,7 @@ ThreadPool.GetMinThreads(out var workerMin, out var compMin);
 var desiredWorker = Math.Max(workerMin, processorCount * 2);
 ThreadPool.SetMinThreads(desiredWorker, compMin);
 
-builder.Services.AddScoped<IKnowledgeBaseRepository, FileKnowledgeBaseRepository>();
+builder.Services.AddSingleton<IKnowledgeBaseRepository, FileKnowledgeBaseRepository>();
 builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
 builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
 builder.Services.AddScoped<IChatService, ChatService>();
@@ -104,6 +104,17 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.UseRateLimiter();
 app.UseCors("AllowFrontend");
+
+// Global exception handler — returns structured JSON errors instead of raw exceptions.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync("{\"error\":\"An unexpected error occurred. Please try again later.\"}");
+    });
+});
 
 app.MapControllers();
 

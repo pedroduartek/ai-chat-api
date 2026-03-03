@@ -11,6 +11,8 @@ public class ChatController : ControllerBase
     private readonly Api.Services.IChatService _chatService;
     private readonly ILogger<ChatController> _logger;
 
+    private const int MaxMessageLength = 500;
+
     public ChatController(Api.Services.IChatService chatService, ILogger<ChatController> logger)
     {
         _chatService = chatService;
@@ -27,7 +29,45 @@ public class ChatController : ControllerBase
             return BadRequest(new { error = "message required" });
         }
 
+        if (messageText.Length > MaxMessageLength)
+        {
+            _logger.LogWarning("Rejected chat request: message too long ({Length} chars)", messageText.Length);
+            return BadRequest(new { error = $"message must be {MaxMessageLength} characters or fewer" });
+        }
+
         var finalAnswer = await _chatService.GenerateAnswerAsync(messageText!);
         return new JsonResult(new { answer = finalAnswer });
+    }
+
+    [HttpPost("chat/stream")]
+    public async Task Stream([FromBody] ChatRequest req)
+    {
+        var messageText = req?.Message;
+        if (string.IsNullOrWhiteSpace(messageText))
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsync("{\"error\":\"message required\"}");
+            return;
+        }
+
+        if (messageText.Length > MaxMessageLength)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsync($"{{\"error\":\"message must be {MaxMessageLength} characters or fewer\"}}");
+            return;
+        }
+
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Connection = "keep-alive";
+
+        await foreach (var token in _chatService.StreamAnswerAsync(messageText!, HttpContext.RequestAborted))
+        {
+            await Response.WriteAsync($"data: {token}\n\n", HttpContext.RequestAborted);
+            await Response.Body.FlushAsync(HttpContext.RequestAborted);
+        }
+
+        await Response.WriteAsync("data: [DONE]\n\n", HttpContext.RequestAborted);
+        await Response.Body.FlushAsync(HttpContext.RequestAborted);
     }
 }

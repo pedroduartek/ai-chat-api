@@ -40,6 +40,17 @@ public class ChatResponseParserTests
         => Assert.Equal("Chat content", Parser.Parse("{\"choices\":[{\"message\":{\"content\":\"Chat content\"}}]}"));
 
     [Fact]
+    public void Parse_ExtractsText_FromChatApiMessageContent()
+        => Assert.Equal("Chat API answer", Parser.Parse("{\"message\":{\"role\":\"assistant\",\"content\":\"Chat API answer\"}}"));
+
+    [Fact]
+    public void Parse_NormalisesFallback_WhenChatApiMessageContainsFallbackPhrase()
+    {
+        var input = $"{{\"message\":{{\"role\":\"assistant\",\"content\":\"{ChatResponseParser.Fallback}\"}}}}";
+        Assert.Equal(ChatResponseParser.Fallback, Parser.Parse(input));
+    }
+
+    [Fact]
     public void Parse_ReturnsRaw_WhenChoicesArrayIsEmpty()
     {
         const string input = "{\"choices\":[]}";

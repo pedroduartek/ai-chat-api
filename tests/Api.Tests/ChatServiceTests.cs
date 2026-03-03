@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Services;
@@ -28,8 +30,22 @@ public class ChatServiceTests
     private class FakeOllamaClient : Api.Application.IOllamaClient
     {
         private readonly string _resp;
+        public string? LastEndpoint { get; private set; }
+        public object? LastPayload { get; private set; }
         public FakeOllamaClient(string resp) => _resp = resp;
-        public Task<string> GenerateAsync(string endpoint, object payload) => Task.FromResult(_resp);
+        public Task<string> GenerateAsync(string endpoint, object payload)
+        {
+            LastEndpoint = endpoint;
+            LastPayload = payload;
+            return Task.FromResult(_resp);
+        }
+        public async IAsyncEnumerable<string> StreamAsync(string endpoint, object payload, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            LastEndpoint = endpoint;
+            LastPayload = payload;
+            await Task.CompletedTask;
+            yield return _resp;
+        }
     }
 
     private class ThrowingOllamaClient : Api.Application.IOllamaClient
@@ -37,12 +53,28 @@ public class ChatServiceTests
         private readonly System.Exception _ex;
         public ThrowingOllamaClient(System.Exception ex) => _ex = ex;
         public Task<string> GenerateAsync(string endpoint, object payload) => Task.FromException<string>(_ex);
+        public async IAsyncEnumerable<string> StreamAsync(string endpoint, object payload, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            throw _ex;
+#pragma warning disable CS0162 // Unreachable code detected
+            yield break;
+#pragma warning restore CS0162
+        }
     }
 
     private static ChatService BuildService(string ollamaResponse, string kb = "")
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", GenerateEndpoint = "/api/generate" });
+        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
         return new ChatService(new FakeKnowledgeBaseRepo(kb), new FakeOllamaClient(ollamaResponse), opts, new ChatResponseParser(), NullLogger<ChatService>.Instance);
+    }
+
+    private static (ChatService svc, FakeOllamaClient client) BuildServiceWithClient(string ollamaResponse, string kb = "")
+    {
+        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
+        var client = new FakeOllamaClient(ollamaResponse);
+        var svc = new ChatService(new FakeKnowledgeBaseRepo(kb), client, opts, new ChatResponseParser(), NullLogger<ChatService>.Instance);
+        return (svc, client);
     }
 
     [Fact]
@@ -115,10 +147,19 @@ public class ChatServiceTests
     }
 
     [Fact]
+    public async Task GenerateAnswerAsync_ParsesChatApiResponse_WithMessageContent()
+    {
+        var content = "{\"message\": {\"role\": \"assistant\", \"content\": \"Hello from chat API\"}}";
+        var svc = BuildService(content);
+        var result = await svc.GenerateAnswerAsync("q");
+        Assert.Equal("Hello from chat API", result);
+    }
+
+    [Fact]
     public async Task GenerateAnswerAsync_ReturnsFallback_WhenResponseContainsFallbackPhrase()
     {
         const string fallback = "I couldn't find information on this website to reply to your question.";
-        var content = $"{{ \"response\": \"{fallback}\" }}";
+        var content = $"{{ \"message\": {{ \"role\": \"assistant\", \"content\": \"{fallback}\" }} }}";
         var svc = BuildService(content);
         var result = await svc.GenerateAnswerAsync("obscure question");
         Assert.Equal(fallback, result);
@@ -127,7 +168,7 @@ public class ChatServiceTests
     [Fact]
     public async Task GenerateAnswerAsync_ThrowsHttpRequestException_WhenOllamaClientThrows()
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", GenerateEndpoint = "/api/generate" });
+        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
         var svc = new ChatService(
             new FakeKnowledgeBaseRepo(),
             new ThrowingOllamaClient(new HttpRequestException("Ollama returned non-success status 503")),
@@ -141,7 +182,7 @@ public class ChatServiceTests
     [Fact]
     public async Task GenerateAnswerAsync_ThrowsIOException_WhenKnowledgeBaseThrows()
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", GenerateEndpoint = "/api/generate" });
+        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
         var svc = new ChatService(
             new ThrowingKbRepo(),
             new FakeOllamaClient("answer"),
@@ -150,5 +191,45 @@ public class ChatServiceTests
             NullLogger<ChatService>.Instance);
 
         await Assert.ThrowsAsync<System.IO.IOException>(() => svc.GenerateAnswerAsync("hello"));
+    }
+
+    [Fact]
+    public async Task GenerateAnswerAsync_SendsPayloadToChatEndpoint()
+    {
+        var (svc, client) = BuildServiceWithClient("ok");
+        await svc.GenerateAnswerAsync("hi");
+        Assert.Equal("/api/chat", client.LastEndpoint);
+    }
+
+    [Fact]
+    public async Task GenerateAnswerAsync_PayloadContainsModelParameters()
+    {
+        var (svc, client) = BuildServiceWithClient("ok");
+        await svc.GenerateAnswerAsync("hi");
+
+        // Serialize and inspect the payload to verify model params are present
+        var json = System.Text.Json.JsonSerializer.Serialize(client.LastPayload);
+        Assert.Contains("\"temperature\"", json);
+        Assert.Contains("\"top_p\"", json);
+        Assert.Contains("\"top_k\"", json);
+        Assert.Contains("\"repeat_penalty\"", json);
+        Assert.Contains("\"num_predict\"", json);
+        Assert.Contains("\"num_ctx\"", json);
+        Assert.Contains("\"messages\"", json);
+        Assert.Contains("\"system\"", json);
+        Assert.Contains("\"user\"", json);
+    }
+
+    [Fact]
+    public async Task StreamAnswerAsync_YieldsTokens()
+    {
+        var svc = BuildService("streamed token");
+        var tokens = new List<string>();
+        await foreach (var token in svc.StreamAnswerAsync("hello"))
+        {
+            tokens.Add(token);
+        }
+        Assert.Single(tokens);
+        Assert.Equal("streamed token", tokens[0]);
     }
 }

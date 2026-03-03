@@ -23,7 +23,8 @@ var builder = WebApplication.CreateBuilder(args);
 SelfLog.Enable(Console.Error);
 
 var loggerConfig = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration);
+    .ReadFrom.Configuration(builder.Configuration)
+    .WriteTo.Console(new Serilog.Formatting.Json.JsonFormatter());
 
 var lokiUrl = builder.Configuration["GRAFANA_LOKI_URL"];
 var lokiUser = builder.Configuration["GRAFANA_LOKI_USER"];
@@ -42,7 +43,9 @@ if (!string.IsNullOrEmpty(lokiUrl) && !string.IsNullOrEmpty(lokiUser) && !string
         {
             Login = lokiUser,
             Password = lokiApiKey
-        });
+        },
+        textFormatter: new Serilog.Formatting.Json.JsonFormatter()
+    );
 }
 
 Log.Logger = loggerConfig.CreateLogger();

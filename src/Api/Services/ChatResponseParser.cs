@@ -33,6 +33,18 @@ public sealed partial class ChatResponseParser : IChatResponseParser
         matchTimeoutMilliseconds: 250)]
     private static partial Regex PromptLeakagePattern();
 
+    // Detects non-English responses. Small models sometimes switch language
+    // when the question contains words from another language (e.g. "portuguese").
+    // We look for common non-English words/patterns that should never appear in a valid answer.
+    [GeneratedRegex(
+        @"(^(não|sim|olá|obrigado|desculpe|resposta|porque|também|então|informação)\b)" +
+        @"|(^(no\s+es|sí|hola|gracias|porque|también|entonces|información)\b)" +
+        @"|(\bnão\s+é\s+uma\s+resposta\b)" +
+        @"|(\bnão\s+é\b.*\bresposta\b)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex NonEnglishPattern();
+
     public string Parse(string rawResponse)
     {
         if (string.IsNullOrEmpty(rawResponse))
@@ -151,6 +163,17 @@ public sealed partial class ChatResponseParser : IChatResponseParser
         try
         {
             if (HallucinatedRefusalPattern().IsMatch(txt))
+                return Fallback;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return Fallback;
+        }
+
+        // Catch non-English responses — the assistant must always reply in English.
+        try
+        {
+            if (NonEnglishPattern().IsMatch(txt))
                 return Fallback;
         }
         catch (RegexMatchTimeoutException)

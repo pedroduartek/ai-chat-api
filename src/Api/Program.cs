@@ -12,11 +12,15 @@ using Api.Infrastructure;
 using System.Threading;
 
 using Serilog;
+using Serilog.Debugging;
 using Serilog.Sinks.Grafana.Loki;
 using Polly;
 using Polly.Extensions.Http;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Surface Serilog sink errors (e.g. Loki connectivity issues) in the console.
+SelfLog.Enable(Console.Error);
 
 var loggerConfig = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration);

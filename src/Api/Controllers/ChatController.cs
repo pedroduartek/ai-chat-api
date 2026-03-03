@@ -2,6 +2,7 @@ using Api.Models;
 using Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Api.Controllers;
 
@@ -42,7 +43,10 @@ public class ChatController : ControllerBase
             return BadRequest(new { error = "Your message contains disallowed content." });
         }
 
+        var sw = Stopwatch.StartNew();
         var finalAnswer = await _chatService.GenerateAnswerAsync(messageText!);
+        _logger.LogInformation("Chat Q={Question} A={Answer} Duration={Duration}ms",
+            messageText, finalAnswer, sw.ElapsedMilliseconds);
         return new JsonResult(new { answer = finalAnswer });
     }
 
@@ -75,12 +79,14 @@ public class ChatController : ControllerBase
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";
 
+        var sw = Stopwatch.StartNew();
         await foreach (var token in _chatService.StreamAnswerAsync(messageText!, HttpContext.RequestAborted))
         {
             await Response.WriteAsync($"data: {token}\n\n", HttpContext.RequestAborted);
             await Response.Body.FlushAsync(HttpContext.RequestAborted);
         }
 
+        _logger.LogInformation("Stream Q={Question} Duration={Duration}ms", messageText, sw.ElapsedMilliseconds);
         await Response.WriteAsync("data: [DONE]\n\n", HttpContext.RequestAborted);
         await Response.Body.FlushAsync(HttpContext.RequestAborted);
     }

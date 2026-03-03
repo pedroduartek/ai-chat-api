@@ -41,17 +41,15 @@ public class ChatService : IChatService
 
     public async Task<string> GenerateAnswerAsync(string message)
     {
-        _logger.LogInformation("Generating answer for message of length {Length}", message.Length);
         var raw = await SendMessage(message);
         var answer = _parser.Parse(raw);
         if (answer == ChatResponseParser.Fallback)
-            _logger.LogWarning("Model returned fallback response for message of length {Length}", message.Length);
+            _logger.LogWarning("Model returned fallback response for message: {Message}", message);
         return answer;
     }
 
     public async IAsyncEnumerable<string> StreamAnswerAsync(string message, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Streaming answer for message of length {Length}", message.Length);
         var payload = await BuildPayload(message, stream: true);
 
         await foreach (var token in _ollamaClient.StreamAsync(_options.ChatEndpoint, payload, cancellationToken))

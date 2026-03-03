@@ -5,7 +5,7 @@ namespace Api.Services;
 
 public sealed class ChatResponseParser : IChatResponseParser
 {
-    public const string Fallback = "I couldn't find information to reply to your question.";
+    public const string Fallback = "I couldn't find information on this website to reply to your question.";
 
     public string Parse(string rawResponse)
     {

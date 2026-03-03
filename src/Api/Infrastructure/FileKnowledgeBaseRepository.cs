@@ -40,13 +40,13 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
             .Where(e => EntrySearchTokens(e).Any(k => queryTokens.Contains(k)))
             .ToList();
 
-        // Fall back to all entries when nothing matches so the model always has context.
-        var result = matched.Count > 0 ? matched : entries;
+        // Return empty when nothing matches - model will use fallback response.
+        // Returning all entries causes hallucinations with irrelevant context.
         _logger.LogInformation(
             "KB lookup: query tokens [{Tokens}] matched {Matched}/{Total} entries",
             string.Join(", ", queryTokens), matched.Count, entries.Count);
 
-        return Task.FromResult(FormatEntries(result));
+        return Task.FromResult(FormatEntries(matched));
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────

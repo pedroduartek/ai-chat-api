@@ -117,7 +117,7 @@ public class ChatServiceTests
     [Fact]
     public async Task GenerateAnswerAsync_ReturnsFallback_WhenResponseContainsFallbackPhrase()
     {
-        const string fallback = "I couldn't find information to reply to your question.";
+        const string fallback = "I couldn't find information on this website to reply to your question.";
         var content = $"{{ \"response\": \"{fallback}\" }}";
         var svc = BuildService(content);
         var result = await svc.GenerateAnswerAsync("obscure question");

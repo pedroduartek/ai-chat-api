@@ -76,11 +76,6 @@ ai-chat-api/
 └── docs/                # project docs (includes a generated project doc)
 ```
 
-## 🤝 Contributing
-
-PRs welcome. Open an issue first for major changes or roadmap discussion.
-
 ## 📄 License
 
 Private
-Test

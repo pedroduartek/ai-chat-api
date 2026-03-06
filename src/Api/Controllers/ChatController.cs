@@ -14,6 +14,21 @@ public class ChatController : ControllerBase
     private readonly ILogger<ChatController> _logger;
     private readonly Api.Services.ILastActivityTracker _activityTracker;
 
+    private string GetClientIp()
+    {
+        try
+        {
+            if (HttpContext?.Request?.Headers != null && HttpContext.Request.Headers.TryGetValue("CF-Connecting-IP", out var cf) && !string.IsNullOrEmpty(cf.ToString()))
+                return cf.ToString();
+
+            return HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+
     private const int MaxMessageLength = 500;
 
     public ChatController(Api.Services.IChatService chatService, ILogger<ChatController> logger, Api.Services.ILastActivityTracker activityTracker)
@@ -48,8 +63,9 @@ public class ChatController : ControllerBase
         _activityTracker?.Touch();
         var sw = Stopwatch.StartNew();
         var finalAnswer = await _chatService.GenerateAnswerAsync(messageText!);
-        _logger.LogInformation("Chat Q={Question} A={Answer} Duration={Duration}ms",
-            messageText, finalAnswer, sw.ElapsedMilliseconds);
+        var clientIp = GetClientIp();
+        _logger.LogInformation("Chat Q={Question} A={Answer} Duration={Duration}ms Source={Source}",
+            messageText, finalAnswer, sw.ElapsedMilliseconds, clientIp);
         return new JsonResult(new { answer = finalAnswer });
     }
 
@@ -90,7 +106,8 @@ public class ChatController : ControllerBase
             await Response.Body.FlushAsync(HttpContext.RequestAborted);
         }
 
-        _logger.LogInformation("Stream Q={Question} Duration={Duration}ms", messageText, sw.ElapsedMilliseconds);
+        var clientIp = GetClientIp();
+        _logger.LogInformation("Stream Q={Question} Duration={Duration}ms Source={Source}", messageText, sw.ElapsedMilliseconds, clientIp);
         await Response.WriteAsync("data: [DONE]\n\n", HttpContext.RequestAborted);
         await Response.Body.FlushAsync(HttpContext.RequestAborted);
     }

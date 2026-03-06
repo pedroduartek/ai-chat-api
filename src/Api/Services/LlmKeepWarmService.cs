@@ -76,7 +76,7 @@ public class LlmKeepWarmService : BackgroundService
                     sw.Stop();
 
                     var answer = string.IsNullOrEmpty(content) ? string.Empty : (content.Length > 200 ? content.Substring(0, 200) + "..." : content);
-                    _logger.LogInformation("Warmup Q={Question} A={Answer} Duration={Duration}ms", warmupQuestion, answer, sw.ElapsedMilliseconds);
+                    _logger.LogInformation("Warmup Q={Question} A={Answer} Duration={Duration}ms Source={Source}", warmupQuestion, answer, sw.ElapsedMilliseconds, "warmup");
                 }
                 catch (Exception ex)
                 {

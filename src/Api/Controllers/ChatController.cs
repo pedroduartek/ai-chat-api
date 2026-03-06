@@ -12,13 +12,15 @@ public class ChatController : ControllerBase
 {
     private readonly Api.Services.IChatService _chatService;
     private readonly ILogger<ChatController> _logger;
+    private readonly Api.Services.ILastActivityTracker _activityTracker;
 
     private const int MaxMessageLength = 500;
 
-    public ChatController(Api.Services.IChatService chatService, ILogger<ChatController> logger)
+    public ChatController(Api.Services.IChatService chatService, ILogger<ChatController> logger, Api.Services.ILastActivityTracker activityTracker)
     {
         _chatService = chatService;
         _logger = logger;
+        _activityTracker = activityTracker;
     }
 
     [HttpPost("chat")]
@@ -43,6 +45,7 @@ public class ChatController : ControllerBase
             return BadRequest(new { error = "Your message contains disallowed content." });
         }
 
+        _activityTracker?.Touch();
         var sw = Stopwatch.StartNew();
         var finalAnswer = await _chatService.GenerateAnswerAsync(messageText!);
         _logger.LogInformation("Chat Q={Question} A={Answer} Duration={Duration}ms",
@@ -75,6 +78,7 @@ public class ChatController : ControllerBase
             return;
         }
 
+        _activityTracker?.Touch();
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";

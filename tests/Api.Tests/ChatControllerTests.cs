@@ -11,7 +11,10 @@ namespace Api.Tests;
 public class ChatControllerTests
 {
     private static ChatController BuildController(Mock<Api.Services.IChatService> svcMock)
-        => new ChatController(svcMock.Object, NullLogger<ChatController>.Instance);
+    {
+        var tracker = new Mock<Api.Services.ILastActivityTracker>();
+        return new ChatController(svcMock.Object, NullLogger<ChatController>.Instance, tracker.Object);
+    }
 
     [Fact]
     public async Task Post_ReturnsBadRequest_WhenMessageMissing()

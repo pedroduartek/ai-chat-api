@@ -129,6 +129,10 @@ builder.Services.AddSingleton<IKnowledgeBaseRepository, FileKnowledgeBaseReposit
 builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
 builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
 builder.Services.AddScoped<IChatService, ChatService>();
+// Keep-alive / warming services
+builder.Services.AddSingleton<Api.Services.ILastActivityTracker, Api.Services.LastActivityTracker>();
+builder.Services.Configure<Api.Services.WarmupOptions>(builder.Configuration.GetSection("Warmup"));
+builder.Services.AddHostedService<Api.Services.LlmKeepWarmService>();
 
 var app = builder.Build();
 

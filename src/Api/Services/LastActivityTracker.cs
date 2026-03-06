@@ -9,7 +9,10 @@ public class LastActivityTracker : ILastActivityTracker
 
     public LastActivityTracker()
     {
-        _lastActivityUtc = DateTime.UtcNow;
+        // Initialize to MinValue so the keep-warm service will perform
+        // an initial warmup after the configured interval even if no
+        // user requests have been received yet.
+        _lastActivityUtc = DateTime.MinValue;
     }
 
     public void Touch()

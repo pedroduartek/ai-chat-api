@@ -1,12 +1,20 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Services;
 
 public sealed partial class ChatResponseParser : IChatResponseParser
 {
     public const string Fallback = "I couldn't find information on this website to reply to your question.";
+
+    private readonly ILogger<ChatResponseParser>? _logger;
+
+    public ChatResponseParser(ILogger<ChatResponseParser>? logger = null)
+    {
+        _logger = logger;
+    }
 
     // Patterns that indicate the model tried to refuse but didn't use the exact fallback.
     // When matched, the response is replaced with the canonical Fallback string.
@@ -55,7 +63,7 @@ public sealed partial class ChatResponseParser : IChatResponseParser
             ?? rawResponse;
     }
 
-    private static string? ParseSingleObject(string content)
+    private string? ParseSingleObject(string content)
     {
         try
         {
@@ -103,13 +111,14 @@ public sealed partial class ChatResponseParser : IChatResponseParser
 
             return null;
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            _logger?.LogDebug(ex, "ParseSingleObject: invalid JSON");
             return null;
         }
     }
 
-    private static string? ParseJsonLines(string content)
+    private string? ParseJsonLines(string content)
     {
         var sb = new StringBuilder();
 
@@ -132,14 +141,17 @@ public sealed partial class ChatResponseParser : IChatResponseParser
 
                 sb.Append(txt);
             }
-            catch (JsonException) { }
+            catch (JsonException ex)
+            {
+                _logger?.LogDebug(ex, "ParseJsonLines: skipping malformed JSON line: {Line}", part);
+            }
         }
 
         return sb.Length > 0 ? sb.ToString() : null;
     }
 
     // Unwraps a string that may itself be a JSON object with a "text" property.
-    private static string? UnwrapText(string json)
+    private string? UnwrapText(string json)
     {
         try
         {
@@ -150,11 +162,15 @@ public sealed partial class ChatResponseParser : IChatResponseParser
                 t.ValueKind == JsonValueKind.String)
                 return t.GetString();
         }
-        catch (JsonException) { }
+        catch (JsonException ex)
+        {
+            _logger?.LogDebug(ex, "UnwrapText: failed to parse inner JSON");
+        }
+
         return null;
     }
 
-    private static string Normalize(string txt)
+    private string Normalize(string txt)
     {
         if (string.IsNullOrEmpty(txt)) return string.Empty;
         if (txt.Contains(Fallback, StringComparison.Ordinal)) return Fallback;
@@ -165,8 +181,9 @@ public sealed partial class ChatResponseParser : IChatResponseParser
             if (HallucinatedRefusalPattern().IsMatch(txt))
                 return Fallback;
         }
-        catch (RegexMatchTimeoutException)
+        catch (RegexMatchTimeoutException ex)
         {
+            _logger?.LogDebug(ex, "Normalize: regex timeout in HallucinatedRefusalPattern");
             return Fallback;
         }
 
@@ -176,8 +193,9 @@ public sealed partial class ChatResponseParser : IChatResponseParser
             if (NonEnglishPattern().IsMatch(txt))
                 return Fallback;
         }
-        catch (RegexMatchTimeoutException)
+        catch (RegexMatchTimeoutException ex)
         {
+            _logger?.LogDebug(ex, "Normalize: regex timeout in NonEnglishPattern");
             return Fallback;
         }
 
@@ -190,8 +208,9 @@ public sealed partial class ChatResponseParser : IChatResponseParser
             if (txt.Length > 0)
                 txt = char.ToUpper(txt[0]) + txt[1..];
         }
-        catch (RegexMatchTimeoutException)
+        catch (RegexMatchTimeoutException ex)
         {
+            _logger?.LogDebug(ex, "Normalize: regex timeout in PromptLeakagePattern.Replace");
             // If regex times out, return as-is rather than losing the answer.
         }
 

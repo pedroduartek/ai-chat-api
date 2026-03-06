@@ -88,9 +88,9 @@ public class OllamaHttpClient : IOllamaClient
                     token = r.GetString();
                 }
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // Skip malformed lines
+                _logger?.LogDebug(ex, "Skipping malformed streaming JSON line: {Line}", line);
             }
 
             if (!string.IsNullOrEmpty(token))

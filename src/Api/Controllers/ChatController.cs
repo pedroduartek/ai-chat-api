@@ -23,8 +23,9 @@ public class ChatController : ControllerBase
 
             return HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
         }
-        catch
+        catch (Exception ex)
         {
+            _logger?.LogDebug(ex, "GetClientIp: failed to determine client IP, returning 'unknown'");
             return "unknown";
         }
     }

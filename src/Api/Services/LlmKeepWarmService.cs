@@ -16,6 +16,7 @@ public class LlmKeepWarmService : BackgroundService
     private readonly ILastActivityTracker _tracker;
     private readonly ChatOptions _chatOptions;
     private readonly object _pingLock = new();
+    private volatile bool _isPinging = false;
 
     public LlmKeepWarmService(ILogger<LlmKeepWarmService> logger, IServiceProvider provider, IOptions<WarmupOptions> options, ILastActivityTracker tracker, IOptions<ChatOptions> chatOptions)
     {
@@ -56,23 +57,34 @@ public class LlmKeepWarmService : BackgroundService
                 continue;
             }
 
-            // Prevent overlapping pings
+            // Prevent overlapping pings using a simple in-memory flag.
             lock (_pingLock)
             {
+                if (_isPinging)
+                {
+                    _logger.LogDebug("Skipping warmup; another warmup is running");
+                    continue;
+                }
+                _isPinging = true;
+            }
+
+            try
+            {
                 // create a scope and run the warmup call via the full chat pipeline
+                using var scope = _provider.CreateScope();
+                var chatService = (IChatService)scope.ServiceProvider.GetService(typeof(IChatService));
+                if (chatService is null)
+                {
+                    _logger.LogWarning("IChatService not available for warmup.");
+                    continue;
+                }
+
+                var warmupQuestion = "What skills does Pedro have?";
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                string content = string.Empty;
                 try
                 {
-                    using var scope = _provider.CreateScope();
-                    var chatService = (IChatService)scope.ServiceProvider.GetService(typeof(IChatService));
-                    if (chatService is null)
-                    {
-                        _logger.LogWarning("IChatService not available for warmup.");
-                        continue;
-                    }
-
-                    var warmupQuestion = "What skills does Pedro have?";
-                    var sw = System.Diagnostics.Stopwatch.StartNew();
-                    var content = chatService.GenerateAnswerAsync(warmupQuestion).GetAwaiter().GetResult();
+                    content = await chatService.GenerateAnswerAsync(warmupQuestion);
                     sw.Stop();
 
                     var answer = string.IsNullOrEmpty(content) ? string.Empty : (content.Length > 200 ? content.Substring(0, 200) + "..." : content);
@@ -81,6 +93,13 @@ public class LlmKeepWarmService : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Warmup ping failed");
+                }
+            }
+            finally
+            {
+                lock (_pingLock)
+                {
+                    _isPinging = false;
                 }
             }
         }

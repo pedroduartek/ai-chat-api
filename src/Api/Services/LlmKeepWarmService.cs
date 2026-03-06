@@ -59,36 +59,24 @@ public class LlmKeepWarmService : BackgroundService
             // Prevent overlapping pings
             lock (_pingLock)
             {
-                // create a scope and run the warmup call
+                // create a scope and run the warmup call via the full chat pipeline
                 try
                 {
                     using var scope = _provider.CreateScope();
-                    var client = (IOllamaClient)scope.ServiceProvider.GetService(typeof(IOllamaClient));
-                    if (client is null)
+                    var chatService = (IChatService)scope.ServiceProvider.GetService(typeof(IChatService));
+                    if (chatService is null)
                     {
-                        _logger.LogWarning("IOllamaClient not available for warmup.");
+                        _logger.LogWarning("IChatService not available for warmup.");
                         continue;
                     }
 
-                    var payload = new
-                    {
-                        model = _chatOptions.Model,
-                        messages = new[]
-                        {
-                            new { role = "system", content = "Warmup ping" },
-                            new { role = "user", content = _options.Prompt }
-                        },
-                        stream = false,
-                        options = new { num_predict = _options.MaxTokens }
-                    };
-
-                    // Execute warmup and log similarly to normal chat requests (question, answer, duration)
+                    var warmupQuestion = "What skills does Pedro have?";
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    var content = client.GenerateAsync(_chatOptions.ChatEndpoint, payload).GetAwaiter().GetResult();
+                    var content = chatService.GenerateAnswerAsync(warmupQuestion).GetAwaiter().GetResult();
                     sw.Stop();
 
                     var answer = string.IsNullOrEmpty(content) ? string.Empty : (content.Length > 200 ? content.Substring(0, 200) + "..." : content);
-                    _logger.LogInformation("Warmup Q={Question} A={Answer} Duration={Duration}ms Endpoint={Endpoint}", _options.Prompt, answer, sw.ElapsedMilliseconds, _chatOptions.ChatEndpoint);
+                    _logger.LogInformation("Warmup Q={Question} A={Answer} Duration={Duration}ms", warmupQuestion, answer, sw.ElapsedMilliseconds);
                 }
                 catch (Exception ex)
                 {

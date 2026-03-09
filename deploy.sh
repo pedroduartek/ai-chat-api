@@ -67,10 +67,10 @@ echo "Deployment finished successfully."
 
 # If an Ollama model is configured, try to pull it into the Ollama container
 if [[ -n "${OLLAMA_MODEL:-}" ]]; then
-  echo "OLLAMA_MODEL is set to '$OLLAMA_MODEL' — will wait 20s then pull model into Ollama..."
+  echo "OLLAMA_MODEL is set to '$OLLAMA_MODEL' — will wait 5s then pull model into Ollama..."
 
-  echo "Sleeping 20s to allow Ollama to start..."
-  sleep 20
+  echo "Sleeping 5s to allow Ollama to start..."
+  sleep 5
 
   echo "Attempting to pull Ollama model: $OLLAMA_MODEL"
   max_pull_attempts=5

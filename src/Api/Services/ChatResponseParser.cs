@@ -32,19 +32,25 @@ public sealed partial class ChatResponseParser : IChatResponseParser
         matchTimeoutMilliseconds: 250)]
     private static partial Regex HallucinatedRefusalPattern();
 
-    // Detects prompt-structure leakage where the model echoes internal labels.
+    // Detects prompt-structure leakage prefixes that are safe to strip
     [GeneratedRegex(
         @"(according\s+to\s+(the\s+)?(WEBSITE\s+CONTENT|reference\s+information|knowledge\s+base|context|KB))" +
         @"|(based\s+on\s+(the\s+)?(WEBSITE\s+CONTENT|reference\s+information|provided\s+(context|information)|KB))" +
-        @"|(the\s+(WEBSITE\s+CONTENT|reference\s+information|KB)\s+(says|states|mentions|indicates|shows))" +
-        @"|(you\s+(asked|requested)\s+me\s+to(\s+remind\s+you)?\s+of\s+the\s+following\s+(rules|instructions))" +
+        @"|(the\s+(WEBSITE\s+CONTENT|reference\s+information|KB)\s+(says|states|mentions|indicates|shows))",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex PromptLeakageStripPattern();
+
+    // Detects severe prompt-structure leakage that references internal rules or system prompts.
+    [GeneratedRegex(
+        @"(you\s+(asked|requested)\s+me\s+to(\s+remind\s+you)?\s+of\s+the\s+following\s+(rules|instructions))" +
         @"|((the|these)\s+(rules|instructions)\s+are:)" +
         @"|(i\s+was\s+(asked|instructed)\s+to)" +
         @"|(i\s+am\s+(asked|instructed)\s+to)" +
         @"|(system\s+prompt|system\s+instructions|internal\s+(instructions|rules))",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 250)]
-    private static partial Regex PromptLeakagePattern();
+    private static partial Regex PromptLeakageFallbackPattern();
 
     // Detects non-English responses. Small models sometimes switch language
     // when the question contains words from another language (e.g. "portuguese").
@@ -204,17 +210,29 @@ public sealed partial class ChatResponseParser : IChatResponseParser
             return Fallback;
         }
 
-        // Detect prompt-structure leakage (e.g. the model echoing internal rules/instructions)
-        // and treat it as disallowed content by returning the canonical fallback.
+        // If the model echoes internal rules or system prompts, return the fallback.
         try
         {
-            if (PromptLeakagePattern().IsMatch(txt))
+            if (PromptLeakageFallbackPattern().IsMatch(txt))
                 return Fallback;
         }
         catch (RegexMatchTimeoutException ex)
         {
-            _logger?.LogDebug(ex, "Normalize: regex timeout in PromptLeakagePattern.IsMatch");
+            _logger?.LogDebug(ex, "Normalize: regex timeout in PromptLeakageFallbackPattern.IsMatch");
             return Fallback;
+        }
+
+        // Otherwise, strip benign prompt-structure prefixes (e.g. "According to the WEBSITE CONTENT,")
+        // and preserve the factual portion of the response.
+        try
+        {
+            txt = PromptLeakageStripPattern().Replace(txt, "").TrimStart(' ', ',', '.');
+            if (txt.Length > 0)
+                txt = char.ToUpper(txt[0]) + txt[1..];
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            _logger?.LogDebug(ex, "Normalize: regex timeout in PromptLeakageStripPattern.Replace");
         }
 
         return txt;

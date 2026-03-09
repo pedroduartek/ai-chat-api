@@ -36,7 +36,12 @@ public sealed partial class ChatResponseParser : IChatResponseParser
     [GeneratedRegex(
         @"(according\s+to\s+(the\s+)?(WEBSITE\s+CONTENT|reference\s+information|knowledge\s+base|context|KB))" +
         @"|(based\s+on\s+(the\s+)?(WEBSITE\s+CONTENT|reference\s+information|provided\s+(context|information)|KB))" +
-        @"|(the\s+(WEBSITE\s+CONTENT|reference\s+information|KB)\s+(says|states|mentions|indicates|shows))",
+        @"|(the\s+(WEBSITE\s+CONTENT|reference\s+information|KB)\s+(says|states|mentions|indicates|shows))" +
+        @"|(you\s+(asked|requested)\s+me\s+to(\s+remind\s+you)?\s+of\s+the\s+following\s+(rules|instructions))" +
+        @"|((the|these)\s+(rules|instructions)\s+are:)" +
+        @"|(i\s+was\s+(asked|instructed)\s+to)" +
+        @"|(i\s+am\s+(asked|instructed)\s+to)" +
+        @"|(system\s+prompt|system\s+instructions|internal\s+(instructions|rules))",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
         matchTimeoutMilliseconds: 250)]
     private static partial Regex PromptLeakagePattern();
@@ -199,19 +204,17 @@ public sealed partial class ChatResponseParser : IChatResponseParser
             return Fallback;
         }
 
-        // Strip prompt-structure leakage ("According to the WEBSITE CONTENT, ...").
-        // Instead of returning fallback, remove the leaked prefix so the factual content remains.
+        // Detect prompt-structure leakage (e.g. the model echoing internal rules/instructions)
+        // and treat it as disallowed content by returning the canonical fallback.
         try
         {
-            txt = PromptLeakagePattern().Replace(txt, "").TrimStart(' ', ',', '.');
-            // Capitalize the first letter after stripping the prefix.
-            if (txt.Length > 0)
-                txt = char.ToUpper(txt[0]) + txt[1..];
+            if (PromptLeakagePattern().IsMatch(txt))
+                return Fallback;
         }
         catch (RegexMatchTimeoutException ex)
         {
-            _logger?.LogDebug(ex, "Normalize: regex timeout in PromptLeakagePattern.Replace");
-            // If regex times out, return as-is rather than losing the answer.
+            _logger?.LogDebug(ex, "Normalize: regex timeout in PromptLeakagePattern.IsMatch");
+            return Fallback;
         }
 
         return txt;

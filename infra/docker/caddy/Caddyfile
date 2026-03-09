@@ -21,16 +21,5 @@ api.pedroduartek.com {
                 -X-Powered-By
         }
 
-        # Simple access log to stdout for debugging routing issues
-        log {
-                output stdout
-                format single_field common_log
-        }
-
-        # Proxy to the api service; preserve the original Host and forwarding headers
-        reverse_proxy api:80 {
-                header_up Host {http.request.host}
-                header_up X-Forwarded-Proto {http.request.scheme}
-                header_up X-Forwarded-For {http.request.remote}
-        }
+        reverse_proxy api:80
 }

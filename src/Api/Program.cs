@@ -143,12 +143,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Ensure routing is established so endpoint-aware middleware (CORS)
-// can evaluate the request and add the proper headers. Keep CORS
-// before any middleware that can short-circuit requests (e.g. rate
-// limiting) so preflight/OPTIONS responses still include the
-// Access-Control-Allow-* headers.
-app.UseRouting();
+// Ensure CORS runs before any middleware that can short-circuit requests
+// (e.g. rate limiting) so preflight/OPTIONS responses still include
+// the Access-Control-Allow-* headers.
 app.UseCors("AllowFrontend");
 app.UseRateLimiter();
 

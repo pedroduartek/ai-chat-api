@@ -143,8 +143,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseRateLimiter();
+// Ensure CORS runs before any middleware that can short-circuit requests
+// (e.g. rate limiting) so preflight/OPTIONS responses still include
+// the Access-Control-Allow-* headers.
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 
 // Security headers middleware — defense-in-depth alongside Caddy-level headers.
 app.Use(async (context, next) =>

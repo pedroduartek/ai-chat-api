@@ -129,6 +129,9 @@ builder.Services.AddSingleton<IKnowledgeBaseRepository, FileKnowledgeBaseReposit
 builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
 builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
 builder.Services.AddScoped<IChatService, ChatService>();
+var emailSection = builder.Configuration.GetSection("Email");
+builder.Services.Configure<Api.Services.EmailOptions>(emailSection);
+builder.Services.AddScoped<Api.Services.IEmailService, Api.Services.SmtpEmailService>();
 // Keep-alive / warming services
 builder.Services.AddSingleton<Api.Services.ILastActivityTracker, Api.Services.LastActivityTracker>();
 builder.Services.Configure<Api.Services.WarmupOptions>(builder.Configuration.GetSection("Warmup"));

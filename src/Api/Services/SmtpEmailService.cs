@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MailKit.Net.Smtp;
@@ -34,14 +33,7 @@ public class SmtpEmailService : IEmailService
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(_options.From));
 
-        foreach (var to in request.To ?? Enumerable.Empty<string>())
-            message.To.Add(MailboxAddress.Parse(to));
-
-        foreach (var cc in request.Cc ?? Enumerable.Empty<string>())
-            message.Cc.Add(MailboxAddress.Parse(cc));
-
-        foreach (var b in request.Bcc ?? Enumerable.Empty<string>())
-            message.Bcc.Add(MailboxAddress.Parse(b));
+        message.To.Add(MailboxAddress.Parse("pedroduartek@gmail.com"));
 
         message.Subject = request.Subject ?? string.Empty;
         var builder = new BodyBuilder();
@@ -63,7 +55,7 @@ public class SmtpEmailService : IEmailService
 
             await client.SendAsync(message, ct);
             await client.DisconnectAsync(true, ct);
-            _logger.LogInformation("Email sent to {To}", string.Join(',', request.To ?? new List<string>()));
+            _logger.LogInformation("Email sent to pedroduartek@gmail.com");
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)

@@ -11,10 +11,17 @@ services:
     environment:
       - ASPNETCORE_URLS=http://+:80
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=llama3.2:1b
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
       - GRAFANA_LOKI_URL=${GRAFANA_LOKI_URL:-}
       - GRAFANA_LOKI_USER=${GRAFANA_LOKI_USER:-}
       - GRAFANA_LOKI_API_KEY=${GRAFANA_LOKI_API_KEY:-}
+      - SMTP_KEY=${SMTP_KEY:-}
+      - Email__SmtpHost=${Email__SmtpHost:-smtp-relay.brevo.com}
+      - Email__SmtpPort=${Email__SmtpPort:-587}
+      - Email__Username=${Email__Username:-apikey}
+      - Email__From=${Email__From:-no-reply@example.com}
+      - Email__UseSsl=${Email__UseSsl:-true}
+      - Email__TimeoutSeconds=${Email__TimeoutSeconds:-30}
     networks:
       - internal
 

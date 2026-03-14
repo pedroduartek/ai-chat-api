@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Api.Models;
 using Api.Services.Chat;
 using Api.Services.Warmup;
@@ -54,8 +55,20 @@ public class ChatController : ControllerBase
         var sw = Stopwatch.StartNew();
         var finalAnswer = await _chatService.GenerateAnswerAsync(messageText, ct);
         var clientIp = GetClientIp();
-        _logger.LogInformation("Chat Q={Question} A={Answer} Duration={Duration}ms Source={Source}",
-            messageText, finalAnswer, sw.ElapsedMilliseconds, clientIp);
+        using (_logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["ChatMode"] = "sync",
+            ["ClientIp"] = clientIp,
+            ["Question"] = messageText,
+            ["QuestionLength"] = messageText.Length,
+            ["Answer"] = finalAnswer,
+            ["AnswerLength"] = finalAnswer.Length,
+            ["DurationMs"] = sw.ElapsedMilliseconds,
+            ["IsFallback"] = string.Equals(finalAnswer, ChatResponseParser.Fallback, StringComparison.Ordinal)
+        }))
+        {
+            _logger.LogInformation("Chat request completed");
+        }
         return new JsonResult(new { answer = finalAnswer });
     }
 
@@ -77,14 +90,30 @@ public class ChatController : ControllerBase
         Response.Headers.Connection = "keep-alive";
 
         var sw = Stopwatch.StartNew();
+        var tokenCount = 0;
+        var characterCount = 0;
         await foreach (var token in _chatService.StreamAnswerAsync(messageText, cancellationToken))
         {
+            tokenCount++;
+            characterCount += token.Length;
             await Response.WriteAsync($"data: {token}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
         }
 
         var clientIp = GetClientIp();
-        _logger.LogInformation("Stream Q={Question} Duration={Duration}ms Source={Source}", messageText, sw.ElapsedMilliseconds, clientIp);
+        using (_logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["ChatMode"] = "stream",
+            ["ClientIp"] = clientIp,
+            ["Question"] = messageText,
+            ["QuestionLength"] = messageText.Length,
+            ["DurationMs"] = sw.ElapsedMilliseconds,
+            ["TokenCount"] = tokenCount,
+            ["StreamedCharacterCount"] = characterCount
+        }))
+        {
+            _logger.LogInformation("Streaming chat request completed");
+        }
         await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
         await Response.Body.FlushAsync(cancellationToken);
     }
@@ -93,7 +122,17 @@ public class ChatController : ControllerBase
     {
         var validation = _validator.Validate(message);
         if (!validation.IsValid)
-            _logger.LogWarning("Rejected chat request: {Reason}", validation.Error);
+        {
+            using (_logger.BeginScope(new Dictionary<string, object?>
+            {
+                ["ClientIp"] = GetClientIp(),
+                ["MessageLength"] = message?.Length ?? 0,
+                ["Reason"] = validation.Error ?? string.Empty
+            }))
+            {
+                _logger.LogWarning("Chat request rejected");
+            }
+        }
 
         return validation;
     }

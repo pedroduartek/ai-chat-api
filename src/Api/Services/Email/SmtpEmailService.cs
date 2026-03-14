@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Api.Options;
@@ -45,9 +47,20 @@ public class SmtpEmailService : IEmailService
 
         using var client = new SmtpClient();
         client.Timeout = _options.TimeoutSeconds * 1000;
+        var sw = Stopwatch.StartNew();
+        using var scope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["SmtpHost"] = _options.SmtpHost,
+            ["SmtpPort"] = _options.SmtpPort,
+            ["From"] = _options.From,
+            ["Recipient"] = _options.Recipient,
+            ["SubjectLength"] = request.Subject?.Length ?? 0,
+            ["BodyLength"] = request.Body?.Length ?? 0,
+            ["IsHtml"] = request.IsHtml
+        });
         try
         {
-            _logger.LogInformation("Connecting to SMTP {Host}:{Port}", _options.SmtpHost, _options.SmtpPort);
+            _logger.LogInformation("SMTP send started");
             var secure = _options.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
             await client.ConnectAsync(_options.SmtpHost!, _options.SmtpPort, secure, ct);
 
@@ -58,12 +71,26 @@ public class SmtpEmailService : IEmailService
 
             await client.SendAsync(message, ct);
             await client.DisconnectAsync(true, ct);
-            _logger.LogInformation("Email sent to {Recipient}", _options.Recipient);
+            sw.Stop();
+            using (_logger.BeginScope(new Dictionary<string, object?>
+            {
+                ["DurationMs"] = sw.ElapsedMilliseconds
+            }))
+            {
+                _logger.LogInformation("SMTP send completed");
+            }
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email");
+            sw.Stop();
+            using (_logger.BeginScope(new Dictionary<string, object?>
+            {
+                ["DurationMs"] = sw.ElapsedMilliseconds
+            }))
+            {
+                _logger.LogError(ex, "SMTP send failed");
+            }
             throw;
         }
     }

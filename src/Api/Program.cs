@@ -17,6 +17,8 @@ using System.Threading;
 
 using Serilog;
 using Serilog.Debugging;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
 using Serilog.Sinks.Grafana.Loki;
 using Polly;
 using Polly.Extensions.Http;
@@ -28,7 +30,8 @@ SelfLog.Enable(Console.Error);
 
 var loggerConfig = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
-    .WriteTo.Console(new Serilog.Formatting.Json.JsonFormatter());
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "ai-chat-api");
 
 var lokiUrl = builder.Configuration["GRAFANA_LOKI_URL"];
 var lokiUser = builder.Configuration["GRAFANA_LOKI_USER"];
@@ -48,7 +51,7 @@ if (!string.IsNullOrEmpty(lokiUrl) && !string.IsNullOrEmpty(lokiUser) && !string
             Login = lokiUser,
             Password = lokiApiKey
         },
-        textFormatter: new Serilog.Formatting.Json.JsonFormatter()
+        textFormatter: new RenderedCompactJsonFormatter()
     );
 }
 
@@ -82,6 +85,16 @@ builder.Services.AddRateLimiter(options =>
     options.OnRejected = async (context, ct) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Api.RateLimiting");
+        using (logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["ClientId"] = GetClientIdentifier(context.HttpContext.Request),
+            ["RequestPath"] = context.HttpContext.Request.Path.Value ?? string.Empty,
+            ["RequestMethod"] = context.HttpContext.Request.Method
+        }))
+        {
+            logger.LogWarning("Request rejected by rate limiter");
+        }
         await context.HttpContext.Response.WriteAsync("Too many requests", ct);
     };
 });
@@ -166,6 +179,35 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.GetLevel = (httpContext, _, exception) =>
+    {
+        if (exception is not null || httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError)
+            return LogEventLevel.Error;
+
+        if (httpContext.Response.StatusCode >= StatusCodes.Status400BadRequest)
+            return LogEventLevel.Warning;
+
+        if (httpContext.Request.Path.StartsWithSegments("/health"))
+            return LogEventLevel.Debug;
+
+        return LogEventLevel.Information;
+    };
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("ClientIp", GetClientIp(httpContext.Request));
+        diagnosticContext.Set("EndpointName", httpContext.GetEndpoint()?.DisplayName ?? "unknown");
+        diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value);
+        diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
+
+        var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+        if (!string.IsNullOrWhiteSpace(userAgent))
+            diagnosticContext.Set("UserAgent", userAgent);
+    };
+});
+
 // Ensure CORS runs before any middleware that can short-circuit requests
 // (e.g. rate limiting) so preflight/OPTIONS responses still include
 // the Access-Control-Allow-* headers.
@@ -201,6 +243,11 @@ static string GetClientIdentifier(HttpRequest request)
     if (request.Headers.TryGetValue("x-api-key", out var apiKey) && !StringValues.IsNullOrEmpty(apiKey))
         return $"apiKey:{apiKey.ToString()}";
 
+    return GetClientIp(request);
+}
+
+static string GetClientIp(HttpRequest request)
+{
     // When behind Cloudflare, CF-Connecting-IP is the ONLY trustworthy client-IP header.
     // Cloudflare always overwrites it with the true visitor IP and strips spoofed values.
     // We intentionally do NOT fall back to X-Forwarded-For / X-Real-IP because those can

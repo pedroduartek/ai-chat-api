@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Api.Models;
 using Api.Services.Email;
 using Microsoft.AspNetCore.Mvc;
@@ -21,25 +22,33 @@ public class EmailController : ControllerBase
     [HttpPost("email")]
     public async Task<IActionResult> Post([FromBody] EmailRequest req, CancellationToken ct)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["SubjectLength"] = req.Subject?.Length ?? 0,
+            ["BodyLength"] = req.Body?.Length ?? 0,
+            ["IsHtml"] = req.IsHtml
+        });
+
         if (!ModelState.IsValid)
         {
-            _logger.LogWarning("Invalid email request");
+            _logger.LogWarning("Email request validation failed");
             return BadRequest(ModelState);
         }
 
         try
         {
             await _emailService.SendEmailAsync(req, ct);
+            _logger.LogInformation("Email request accepted");
             return Accepted();
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Email service configuration error");
+            _logger.LogError(ex, "Email request failed due to configuration");
             return StatusCode(500, new { error = "Email service not configured" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email");
+            _logger.LogError(ex, "Email request failed");
             return StatusCode(500, new { error = "Failed to send email" });
         }
     }

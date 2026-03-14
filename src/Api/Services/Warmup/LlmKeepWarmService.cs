@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Api.Options;
@@ -53,7 +54,14 @@ public class LlmKeepWarmService : BackgroundService
             var since = DateTime.UtcNow - last;
             if (since < delay)
             {
-                _logger.LogDebug("Skipping warmup ping; last activity {Elapsed}s ago (< {Interval}s)", (int)since.TotalSeconds, (int)delay.TotalSeconds);
+                using (_logger.BeginScope(new Dictionary<string, object?>
+                {
+                    ["IdleSeconds"] = (int)since.TotalSeconds,
+                    ["IntervalSeconds"] = (int)delay.TotalSeconds
+                }))
+                {
+                    _logger.LogDebug("Warmup ping skipped due to recent activity");
+                }
                 continue;
             }
 
@@ -62,7 +70,7 @@ public class LlmKeepWarmService : BackgroundService
             {
                 if (_isPinging)
                 {
-                    _logger.LogDebug("Skipping warmup; another warmup is running");
+                    _logger.LogDebug("Warmup ping skipped because another warmup is running");
                     continue;
                 }
                 _isPinging = true;
@@ -83,11 +91,30 @@ public class LlmKeepWarmService : BackgroundService
                     sw.Stop();
 
                     var answer = string.IsNullOrEmpty(content) ? string.Empty : (content.Length > 200 ? content[..200] + "..." : content);
-                    _logger.LogInformation("Warmup Q={Question} A={Answer} Duration={Duration}ms Source={Source}", warmupQuestion, answer, sw.ElapsedMilliseconds, "warmup");
+                    using (_logger.BeginScope(new Dictionary<string, object?>
+                    {
+                        ["Trigger"] = "warmup",
+                        ["Question"] = warmupQuestion,
+                        ["Answer"] = answer,
+                        ["AnswerLength"] = content.Length,
+                        ["DurationMs"] = sw.ElapsedMilliseconds
+                    }))
+                    {
+                        _logger.LogInformation("Warmup request completed");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Warmup ping failed");
+                    sw.Stop();
+                    using (_logger.BeginScope(new Dictionary<string, object?>
+                    {
+                        ["Trigger"] = "warmup",
+                        ["Question"] = warmupQuestion,
+                        ["DurationMs"] = sw.ElapsedMilliseconds
+                    }))
+                    {
+                        _logger.LogWarning(ex, "Warmup request failed");
+                    }
                 }
             }
             finally

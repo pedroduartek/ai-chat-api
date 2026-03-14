@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 
 using Api.Application;
 using Microsoft.Extensions.Logging;
@@ -25,7 +26,16 @@ public class ChatService : IChatService
         var raw = await SendMessage(message, cancellationToken);
         var answer = _parser.Parse(raw);
         if (answer == ChatResponseParser.Fallback)
-            _logger.LogWarning("Model returned fallback response for message: {Message}", message);
+        {
+            using (_logger.BeginScope(new Dictionary<string, object?>
+            {
+                ["Question"] = message,
+                ["QuestionLength"] = message.Length
+            }))
+            {
+                _logger.LogWarning("Model returned fallback response");
+            }
+        }
         return answer;
     }
 

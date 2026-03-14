@@ -24,6 +24,7 @@ using Polly;
 using Polly.Extensions.Http;
 
 var builder = WebApplication.CreateBuilder(args);
+var swaggerEnabled = builder.Configuration.GetValue("Swagger:Enabled", builder.Environment.IsDevelopment());
 
 // Surface Serilog sink errors (e.g. Loki connectivity issues) in the console.
 SelfLog.Enable(Console.Error);
@@ -172,8 +173,8 @@ builder.Services.AddHostedService<LlmKeepWarmService>();
 
 var app = builder.Build();
 
-// Only expose Swagger in development — leaking the API schema in production is an information-disclosure risk.
-if (app.Environment.IsDevelopment())
+// Swagger exposure is configuration-driven so production can opt in without code changes.
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI();

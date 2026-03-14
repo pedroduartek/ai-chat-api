@@ -10,6 +10,7 @@ services:
     # No local .env required; environment values set here
     environment:
       - ASPNETCORE_URLS=http://+:80
+      - Swagger__Enabled=${Swagger__Enabled:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:1b}
       - GRAFANA_LOKI_URL=${GRAFANA_LOKI_URL:-}

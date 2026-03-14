@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Api.Models;
 using Api.Security;
 using Api.Services.Email;
+using Api.Services.Turnstile;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -13,11 +14,16 @@ namespace Api.Controllers;
 public class EmailController : ControllerBase
 {
     private readonly IEmailService _emailService;
+    private readonly ITurnstileVerificationService _turnstileVerificationService;
     private readonly ILogger<EmailController> _logger;
 
-    public EmailController(IEmailService emailService, ILogger<EmailController> logger)
+    public EmailController(
+        IEmailService emailService,
+        ITurnstileVerificationService turnstileVerificationService,
+        ILogger<EmailController> logger)
     {
         _emailService = emailService;
+        _turnstileVerificationService = turnstileVerificationService;
         _logger = logger;
     }
 
@@ -47,6 +53,29 @@ public class EmailController : ControllerBase
             return BadRequest(ModelState);
         }
 
+        var turnstileResult = await _turnstileVerificationService.VerifyAsync(
+            req.TurnstileToken,
+            GetClientIp(),
+            GetExpectedTurnstileAction(req.Source),
+            ct);
+
+        if (!turnstileResult.Success)
+        {
+            using (_logger.BeginScope(new Dictionary<string, object?>
+            {
+                ["ClientIp"] = GetClientIp(),
+                ["FailureReason"] = turnstileResult.FailureReason ?? string.Empty,
+                ["TurnstileErrorCodes"] = string.Join(", ", turnstileResult.ErrorCodes ?? [])
+            }))
+            {
+                _logger.LogWarning("Turnstile verification failed for email request");
+            }
+
+            return turnstileResult.IsServiceError
+                ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = turnstileResult.UserMessage })
+                : BadRequest(new { error = turnstileResult.UserMessage });
+        }
+
         try
         {
             await _emailService.SendEmailAsync(req, ct);
@@ -64,4 +93,21 @@ public class EmailController : ControllerBase
             return StatusCode(500, new { error = "Failed to send email" });
         }
     }
+
+    private string GetClientIp()
+    {
+        if (HttpContext?.Request?.Headers != null &&
+            HttpContext.Request.Headers.TryGetValue("CF-Connecting-IP", out var cf) &&
+            !string.IsNullOrWhiteSpace(cf.ToString()))
+        {
+            return cf.ToString();
+        }
+
+        return HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+    }
+
+    private static string GetExpectedTurnstileAction(string? source) =>
+        string.Equals(source, "terminal", StringComparison.OrdinalIgnoreCase)
+            ? "terminal_email"
+            : "contact_form";
 }

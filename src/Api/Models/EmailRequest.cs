@@ -31,6 +31,9 @@ public sealed partial class EmailRequest : IValidatableObject
     [StringLength(MaxSourceLength)]
     public string? Source { get; set; }
 
+    [StringLength(2048)]
+    public string? TurnstileToken { get; set; }
+
     [StringLength(0, ErrorMessage = "Unexpected field.")]
     public string? Company { get; set; }
 

@@ -14,6 +14,7 @@ using Api.Options;
 using Api.Security;
 using Api.Services.Chat;
 using Api.Services.Email;
+using Api.Services.Turnstile;
 using Api.Services.Warmup;
 using System.Threading;
 
@@ -170,6 +171,14 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<TurnstileOptions>()
+    .Bind(config.GetSection("Turnstile"))
+    .ValidateDataAnnotations()
+    .Validate(options => !options.Enabled || !string.IsNullOrWhiteSpace(options.SecretKey), "Turnstile:SecretKey is required when Turnstile is enabled.")
+    .Validate(options => !options.Enabled || Uri.TryCreate(options.SiteVerifyUrl, UriKind.Absolute, out _), "Turnstile:SiteVerifyUrl must be an absolute URI.")
+    .ValidateOnStart();
+
 var processorCount = Environment.ProcessorCount;
 var maxConns = Math.Max(4, processorCount * 4);
 builder.Services.AddHttpClient<IChatCompletionClient, OllamaHttpClient>((serviceProvider, client) =>
@@ -198,6 +207,7 @@ builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
 builder.Services.AddScoped<IChatRequestFactory, ChatRequestFactory>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddHttpClient<ITurnstileVerificationService, TurnstileVerificationService>();
 // Keep-alive / warming services
 builder.Services.AddSingleton<ILastActivityTracker, LastActivityTracker>();
 builder.Services.AddHostedService<LlmKeepWarmService>();

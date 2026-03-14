@@ -60,4 +60,4 @@ ai-chat-api/
 
 ## License
 
-Private
+Proprietary. All rights reserved. See [LICENSE](C:/Users/pduarte/repos/Project%202026/ai-chat-api/LICENSE).

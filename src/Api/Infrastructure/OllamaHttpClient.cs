@@ -1,58 +1,53 @@
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-
-using Microsoft.Extensions.Options;
+using Api.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Api.Infrastructure;
 
 using Api.Application;
-using Api.Services;
 
-public class OllamaHttpClient : IOllamaClient
+public class OllamaHttpClient : IChatCompletionClient
 {
-    private readonly System.Net.Http.IHttpClientFactory _clientFactory;
-    private readonly ChatOptions _options;
+    private readonly HttpClient _client;
+    private readonly string _chatEndpoint;
     private readonly ILogger<OllamaHttpClient> _logger;
 
-    public OllamaHttpClient(System.Net.Http.IHttpClientFactory clientFactory, IOptions<ChatOptions> options, ILogger<OllamaHttpClient> logger)
+    public OllamaHttpClient(HttpClient client, IOptions<ChatOptions> options, ILogger<OllamaHttpClient> logger)
     {
-        _clientFactory = clientFactory;
-        _options = options?.Value ?? new ChatOptions();
+        _client = client;
+        _chatEndpoint = (options?.Value ?? new ChatOptions()).ChatEndpoint;
         _logger = logger;
     }
 
-    public async Task<string> GenerateAsync(string endpoint, object payload)
+    public async Task<string> GenerateAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
     {
-        var client = _clientFactory.CreateClient(_options.ClientName);
-        var resp = await client.PostAsJsonAsync(endpoint, payload);
+        var resp = await _client.PostAsJsonAsync(_chatEndpoint, request, cancellationToken);
         var content = await resp.Content.ReadAsStringAsync();
 
         if (!resp.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Ollama HTTP call to {Endpoint} failed with status {StatusCode} and body: {Body}", endpoint, resp.StatusCode, content);
+            _logger.LogWarning("Ollama HTTP call to {Endpoint} failed with status {StatusCode} and body: {Body}", _chatEndpoint, resp.StatusCode, content);
             throw new System.Net.Http.HttpRequestException($"Ollama returned non-success status {(int)resp.StatusCode}");
         }
 
         return content;
     }
 
-    public async IAsyncEnumerable<string> StreamAsync(string endpoint, object payload, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<string> StreamAsync(ChatCompletionRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var client = _clientFactory.CreateClient(_options.ClientName);
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _chatEndpoint)
         {
-            Content = JsonContent.Create(payload)
+            Content = JsonContent.Create(request)
         };
 
-        using var resp = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var resp = await _client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogWarning("Ollama streaming call to {Endpoint} failed with status {StatusCode} and body: {Body}", endpoint, resp.StatusCode, body);
+            _logger.LogWarning("Ollama streaming call to {Endpoint} failed with status {StatusCode} and body: {Body}", _chatEndpoint, resp.StatusCode, body);
             throw new System.Net.Http.HttpRequestException($"Ollama returned non-success status {(int)resp.StatusCode}");
         }
 

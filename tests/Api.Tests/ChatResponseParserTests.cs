@@ -1,4 +1,4 @@
-using Api.Services;
+using Api.Services.Chat;
 using Xunit;
 
 namespace Api.Tests;

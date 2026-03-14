@@ -1,4 +1,4 @@
-using Api.Services;
+using Api.Security;
 using Xunit;
 
 namespace Api.Tests;
@@ -72,6 +72,6 @@ public class InputSanitizerTests
     [Fact]
     public void Sanitize_ReturnsEmptyForNull()
     {
-        Assert.Equal(string.Empty, InputSanitizer.Sanitize(null!) ?? string.Empty);
+        Assert.Equal(string.Empty, InputSanitizer.Sanitize(null));
     }
 }

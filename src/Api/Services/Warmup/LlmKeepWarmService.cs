@@ -1,30 +1,30 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Api.Options;
+using Api.Services.Chat;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Api.Application;
 
-namespace Api.Services;
+namespace Api.Services.Warmup;
 
 public class LlmKeepWarmService : BackgroundService
 {
     private readonly ILogger<LlmKeepWarmService> _logger;
-    private readonly IServiceProvider _provider;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly WarmupOptions _options;
     private readonly ILastActivityTracker _tracker;
-    private readonly ChatOptions _chatOptions;
     private readonly object _pingLock = new();
     private volatile bool _isPinging = false;
 
-    public LlmKeepWarmService(ILogger<LlmKeepWarmService> logger, IServiceProvider provider, IOptions<WarmupOptions> options, ILastActivityTracker tracker, IOptions<ChatOptions> chatOptions)
+    public LlmKeepWarmService(ILogger<LlmKeepWarmService> logger, IServiceScopeFactory scopeFactory, IOptions<WarmupOptions> options, ILastActivityTracker tracker)
     {
         _logger = logger;
-        _provider = provider;
+        _scopeFactory = scopeFactory;
         _options = options?.Value ?? new WarmupOptions();
         _tracker = tracker;
-        _chatOptions = chatOptions?.Value ?? new ChatOptions();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -71,23 +71,18 @@ public class LlmKeepWarmService : BackgroundService
             try
             {
                 // create a scope and run the warmup call via the full chat pipeline
-                using var scope = _provider.CreateScope();
-                var chatService = (IChatService)scope.ServiceProvider.GetService(typeof(IChatService));
-                if (chatService is null)
-                {
-                    _logger.LogWarning("IChatService not available for warmup.");
-                    continue;
-                }
+                using var scope = _scopeFactory.CreateScope();
+                var chatService = scope.ServiceProvider.GetRequiredService<IChatService>();
 
                 var warmupQuestion = "What skills does Pedro have?";
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 string content = string.Empty;
                 try
                 {
-                    content = await chatService.GenerateAnswerAsync(warmupQuestion);
+                    content = await chatService.GenerateAnswerAsync(warmupQuestion, stoppingToken);
                     sw.Stop();
 
-                    var answer = string.IsNullOrEmpty(content) ? string.Empty : (content.Length > 200 ? content.Substring(0, 200) + "..." : content);
+                    var answer = string.IsNullOrEmpty(content) ? string.Empty : (content.Length > 200 ? content[..200] + "..." : content);
                     _logger.LogInformation("Warmup Q={Question} A={Answer} Duration={Duration}ms Source={Source}", warmupQuestion, answer, sw.ElapsedMilliseconds, "warmup");
                 }
                 catch (Exception ex)

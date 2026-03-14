@@ -1,6 +1,6 @@
 using System;
 
-namespace Api.Services;
+namespace Api.Services.Warmup;
 
 public interface ILastActivityTracker
 {

@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Api.Services;
+using Api.Application;
+using Api.Options;
+using Api.Services.Chat;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -13,47 +15,59 @@ namespace Api.Tests;
 
 public class ChatServiceTests
 {
-    private class FakeKnowledgeBaseRepo : Api.Application.IKnowledgeBaseRepository
+    private sealed class FakeKnowledgeBaseRepo : IKnowledgeBaseRepository
     {
         private readonly string _kb;
+        public int GetKnowledgeBaseCallCount { get; private set; }
+        public string? LastQuery { get; private set; }
         public FakeKnowledgeBaseRepo(string kb = "") => _kb = kb;
-        public Task<string> GetKnowledgeBaseAsync() => Task.FromResult(_kb);
-        public Task<string> GetRelevantKnowledgeBaseAsync(string query) => Task.FromResult(_kb);
+
+        public Task<string> GetKnowledgeBaseAsync()
+        {
+            GetKnowledgeBaseCallCount++;
+            return Task.FromResult(_kb);
+        }
+
+        public Task<string> GetRelevantKnowledgeBaseAsync(string query)
+        {
+            LastQuery = query;
+            return Task.FromResult(_kb);
+        }
     }
 
-    private class ThrowingKbRepo : Api.Application.IKnowledgeBaseRepository
+    private sealed class ThrowingKbRepo : IKnowledgeBaseRepository
     {
         public Task<string> GetKnowledgeBaseAsync() => Task.FromException<string>(new System.IO.IOException("KB file not found"));
         public Task<string> GetRelevantKnowledgeBaseAsync(string query) => Task.FromException<string>(new System.IO.IOException("KB file not found"));
     }
 
-    private class FakeOllamaClient : Api.Application.IOllamaClient
+    private sealed class FakeChatCompletionClient : IChatCompletionClient
     {
         private readonly string _resp;
-        public string? LastEndpoint { get; private set; }
-        public object? LastPayload { get; private set; }
-        public FakeOllamaClient(string resp) => _resp = resp;
-        public Task<string> GenerateAsync(string endpoint, object payload)
+        public ChatCompletionRequest? LastRequest { get; private set; }
+
+        public FakeChatCompletionClient(string resp) => _resp = resp;
+
+        public Task<string> GenerateAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default)
         {
-            LastEndpoint = endpoint;
-            LastPayload = payload;
+            LastRequest = request;
             return Task.FromResult(_resp);
         }
-        public async IAsyncEnumerable<string> StreamAsync(string endpoint, object payload, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+
+        public async IAsyncEnumerable<string> StreamAsync(ChatCompletionRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            LastEndpoint = endpoint;
-            LastPayload = payload;
+            LastRequest = request;
             await Task.CompletedTask;
             yield return _resp;
         }
     }
 
-    private class ThrowingOllamaClient : Api.Application.IOllamaClient
+    private sealed class ThrowingChatCompletionClient : IChatCompletionClient
     {
         private readonly System.Exception _ex;
-        public ThrowingOllamaClient(System.Exception ex) => _ex = ex;
-        public Task<string> GenerateAsync(string endpoint, object payload) => Task.FromException<string>(_ex);
-        public async IAsyncEnumerable<string> StreamAsync(string endpoint, object payload, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public ThrowingChatCompletionClient(System.Exception ex) => _ex = ex;
+        public Task<string> GenerateAsync(ChatCompletionRequest request, CancellationToken cancellationToken = default) => Task.FromException<string>(_ex);
+        public async IAsyncEnumerable<string> StreamAsync(ChatCompletionRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask;
             throw _ex;
@@ -65,16 +79,18 @@ public class ChatServiceTests
 
     private static ChatService BuildService(string ollamaResponse, string kb = "")
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
-        return new ChatService(new FakeKnowledgeBaseRepo(kb), new FakeOllamaClient(ollamaResponse), opts, new ChatResponseParser(), NullLogger<ChatService>.Instance);
+        var opts = Microsoft.Extensions.Options.Options.Create(new ChatOptions { ChatEndpoint = "/api/chat" });
+        var requestFactory = new ChatRequestFactory(new FakeKnowledgeBaseRepo(kb), opts);
+        return new ChatService(requestFactory, new FakeChatCompletionClient(ollamaResponse), new ChatResponseParser(), NullLogger<ChatService>.Instance);
     }
 
-    private static (ChatService svc, FakeOllamaClient client) BuildServiceWithClient(string ollamaResponse, string kb = "")
+    private static (ChatService svc, FakeChatCompletionClient client, FakeKnowledgeBaseRepo repo) BuildServiceWithClient(string ollamaResponse, string kb = "")
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
-        var client = new FakeOllamaClient(ollamaResponse);
-        var svc = new ChatService(new FakeKnowledgeBaseRepo(kb), client, opts, new ChatResponseParser(), NullLogger<ChatService>.Instance);
-        return (svc, client);
+        var opts = Microsoft.Extensions.Options.Options.Create(new ChatOptions { ChatEndpoint = "/api/chat" });
+        var repo = new FakeKnowledgeBaseRepo(kb);
+        var client = new FakeChatCompletionClient(ollamaResponse);
+        var svc = new ChatService(new ChatRequestFactory(repo, opts), client, new ChatResponseParser(), NullLogger<ChatService>.Instance);
+        return (svc, client, repo);
     }
 
     [Fact]
@@ -168,11 +184,10 @@ public class ChatServiceTests
     [Fact]
     public async Task GenerateAnswerAsync_ThrowsHttpRequestException_WhenOllamaClientThrows()
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
+        var opts = Microsoft.Extensions.Options.Options.Create(new ChatOptions { ChatEndpoint = "/api/chat" });
         var svc = new ChatService(
-            new FakeKnowledgeBaseRepo(),
-            new ThrowingOllamaClient(new HttpRequestException("Ollama returned non-success status 503")),
-            opts,
+            new ChatRequestFactory(new FakeKnowledgeBaseRepo(), opts),
+            new ThrowingChatCompletionClient(new HttpRequestException("Ollama returned non-success status 503")),
             new ChatResponseParser(),
             NullLogger<ChatService>.Instance);
 
@@ -182,11 +197,10 @@ public class ChatServiceTests
     [Fact]
     public async Task GenerateAnswerAsync_ThrowsIOException_WhenKnowledgeBaseThrows()
     {
-        var opts = Options.Create(new ChatOptions { ClientName = "test", ChatEndpoint = "/api/chat" });
+        var opts = Microsoft.Extensions.Options.Options.Create(new ChatOptions { ChatEndpoint = "/api/chat" });
         var svc = new ChatService(
-            new ThrowingKbRepo(),
-            new FakeOllamaClient("answer"),
-            opts,
+            new ChatRequestFactory(new ThrowingKbRepo(), opts),
+            new FakeChatCompletionClient("answer"),
             new ChatResponseParser(),
             NullLogger<ChatService>.Instance);
 
@@ -194,36 +208,48 @@ public class ChatServiceTests
     }
 
     [Fact]
-    public async Task GenerateAnswerAsync_SendsPayloadToChatEndpoint()
+    public async Task GenerateAnswerAsync_UsesFullKnowledgeBaseForPrompt()
     {
-        var (svc, client) = BuildServiceWithClient("ok");
+        var (svc, client, repo) = BuildServiceWithClient("ok", kb: "FULL KB CONTENT");
         await svc.GenerateAnswerAsync("hi");
-        Assert.Equal("/api/chat", client.LastEndpoint);
+
+        Assert.Equal(1, repo.GetKnowledgeBaseCallCount);
+        Assert.Null(repo.LastQuery);
+        Assert.Contains("FULL KB CONTENT", client.LastRequest!.Messages[0].Content);
     }
 
     [Fact]
     public async Task GenerateAnswerAsync_PayloadContainsModelParameters()
     {
-        var (svc, client) = BuildServiceWithClient("ok");
+        var (svc, client, _) = BuildServiceWithClient("ok");
         await svc.GenerateAnswerAsync("hi");
 
-        // Serialize and inspect the payload to verify model params are present
-        var json = System.Text.Json.JsonSerializer.Serialize(client.LastPayload);
-        Assert.Contains("\"temperature\"", json);
-        Assert.Contains("\"top_p\"", json);
-        Assert.Contains("\"top_k\"", json);
-        Assert.Contains("\"repeat_penalty\"", json);
-        Assert.Contains("\"num_predict\"", json);
-        Assert.Contains("\"num_ctx\"", json);
-        Assert.Contains("\"messages\"", json);
-        Assert.Contains("\"system\"", json);
-        Assert.Contains("\"user\"", json);
+        Assert.NotNull(client.LastRequest);
+        Assert.False(client.LastRequest!.Stream);
+        Assert.Equal(0.3, client.LastRequest.Options.Temperature);
+        Assert.Equal(0.9, client.LastRequest.Options.TopP);
+        Assert.Equal(40, client.LastRequest.Options.TopK);
+        Assert.Equal(1.1, client.LastRequest.Options.RepeatPenalty);
+        Assert.Equal(256, client.LastRequest.Options.NumPredict);
+        Assert.Equal(2048, client.LastRequest.Options.NumCtx);
+        Assert.Collection(
+            client.LastRequest.Messages,
+            message =>
+            {
+                Assert.Equal("system", message.Role);
+                Assert.Contains("You are a friendly assistant", message.Content);
+            },
+            message =>
+            {
+                Assert.Equal("user", message.Role);
+                Assert.Equal("hi", message.Content);
+            });
     }
 
     [Fact]
     public async Task StreamAnswerAsync_YieldsTokens()
     {
-        var svc = BuildService("streamed token");
+        var (svc, client, _) = BuildServiceWithClient("streamed token");
         var tokens = new List<string>();
         await foreach (var token in svc.StreamAnswerAsync("hello"))
         {
@@ -231,5 +257,6 @@ public class ChatServiceTests
         }
         Assert.Single(tokens);
         Assert.Equal("streamed token", tokens[0]);
+        Assert.True(client.LastRequest!.Stream);
     }
 }

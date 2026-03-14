@@ -14,7 +14,7 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
 {
     private readonly ILogger<FileKnowledgeBaseRepository> _logger;
     private readonly Lazy<List<KbEntry>> _cachedEntries;
-    private string? _cachedFormatted;
+    private string? _cachedFormattedKnowledgeBase;
 
     // Entry IDs that contain meta-instructions rather than factual content.
     // These are already covered by the system prompt and should not be injected into the KB block.
@@ -28,8 +28,8 @@ public class FileKnowledgeBaseRepository : IKnowledgeBaseRepository
 
     public Task<string> GetKnowledgeBaseAsync()
     {
-        _cachedFormatted ??= FormatEntries(_cachedEntries.Value);
-        return Task.FromResult(_cachedFormatted);
+        _cachedFormattedKnowledgeBase ??= FormatEntries(_cachedEntries.Value);
+        return Task.FromResult(_cachedFormattedKnowledgeBase);
     }
 
     public Task<string> GetRelevantKnowledgeBaseAsync(string query)

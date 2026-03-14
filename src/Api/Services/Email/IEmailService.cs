@@ -1,6 +1,6 @@
-namespace Api.Services;
-
 using Api.Models;
+
+namespace Api.Services.Email;
 
 public interface IEmailService
 {

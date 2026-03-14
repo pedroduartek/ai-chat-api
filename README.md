@@ -1,81 +1,63 @@
 # AI Chat API
 
-Lightweight, self-hostable ASP.NET Core API that exposes a JSON `POST /chat` endpoint. Integrates a local knowledge base and is packaged for Docker-based deployment.
+Self-hostable ASP.NET Core API for Pedro Duarte's website. The application exposes chat, health, and contact-email endpoints, augments chat prompts with a local knowledge base, and ships with Docker-based dev and production deployment files.
+
+## Features
+
+- `POST /chat` for synchronous chat responses
+- `POST /chat/stream` for streaming chat responses
+- `POST /email` for contact-email delivery through SMTP
+- `GET /health` for readiness checks
+- Local knowledge base support via `src/Api/Resources/website_kb.txt`
+- Docker Compose manifests for development and production
+
+## Tech stack
+
+- .NET 10 / ASP.NET Core
+- MailKit for SMTP delivery
+- Serilog for structured logging
+- Polly for outbound HTTP retry policy
+- Docker and Caddy for containerized deployment
 
 ## Quick start
 
-Prerequisites: .NET 10 SDK, Docker (optional).
+Prerequisites: .NET 10 SDK and optionally Docker.
 
-From the project root:
-
-```bash
-# Run locally (development)
-dotnet build src/Api
-dotnet run --project src/Api
-
-# Or with Docker Compose (dev)
-docker compose -f infra/docker/compose.dev.yml up --build
-```
-
-## Endpoints
-
-- `POST /chat` — submit chat requests (see `Models/ChatRequest.cs`).
-- `GET /health` — health/readiness check.
-
-# AI Chat API
-
-Self-hostable ASP.NET Core chat API that exposes a JSON `POST /chat` endpoint, augments prompts with a local knowledge base, and is packaged for container deployment.
-
-## 🌟 Features
-
-- API-first `POST /chat` for conversational requests
-- Lightweight `GET /health` readiness probe
-- Local KB support (`Resources/website_kb.txt`) for contextual augmentation
-- Container-friendly: Dockerfile and compose manifests for dev/prod
-
-## 🛠️ Tech Stack
-
-- .NET 10 / ASP.NET Core (C#)
-- Docker & Docker Compose
-- Caddy (reverse proxy) in infra compose
-
-## 🚀 Quick Start
-
-### Prerequisites
-- .NET 10 SDK
-- Docker & Docker Compose (optional)
-
-### Run locally
+Run locally:
 
 ```bash
-# Build and run the API
-dotnet build src/Api
+dotnet build ai-chat-api.sln
 dotnet run --project src/Api
 ```
 
-### Run with Docker Compose (development)
+Run with Docker Compose:
 
 ```bash
 docker compose -f infra/docker/compose.dev.yml up --build
 ```
 
-## 🔌 API Endpoints
+Run tests:
 
-- `POST /chat` — submit chat requests (see `src/Api/Models/ChatRequest.cs`)
-- `GET /health` — health/readiness check
-
-## 📁 Project Structure
-
+```bash
+dotnet test tests/Api.Tests/Api.Tests.csproj
 ```
+
+## Project structure
+
+```text
 ai-chat-api/
-├── src/Api/             # ASP.NET Core API
-│   ├── Controllers/     # `ChatController`, `HealthController`
-│   ├── Services/        # `ChatService`, `IChatService`, options
-│   └── Resources/       # local KB (website_kb.txt)
-├── infra/docker/        # docker compose and Caddy config
-└── docs/                # project docs (includes a generated project doc)
+├── src/Api/
+│   ├── Application/     # contracts and typed LLM request models
+│   ├── Controllers/     # HTTP endpoints
+│   ├── Infrastructure/  # external adapters (HTTP, file system)
+│   ├── Options/         # typed configuration objects
+│   ├── Security/        # request guardrails
+│   ├── Services/        # chat, email, and warmup workflows
+│   └── Resources/       # local knowledge base content
+├── tests/Api.Tests/     # xUnit test suite
+└── infra/docker/        # compose and reverse-proxy config
 ```
 
-## 📄 License
+## License
 
 Private

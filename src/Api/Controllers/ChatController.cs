@@ -1,5 +1,6 @@
 using Api.Models;
-using Api.Services;
+using Api.Services.Chat;
+using Api.Services.Warmup;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -10,9 +11,10 @@ namespace Api.Controllers;
 [Route("")]
 public class ChatController : ControllerBase
 {
-    private readonly Api.Services.IChatService _chatService;
+    private readonly IChatService _chatService;
+    private readonly ChatMessageValidator _validator;
     private readonly ILogger<ChatController> _logger;
-    private readonly Api.Services.ILastActivityTracker _activityTracker;
+    private readonly ILastActivityTracker _activityTracker;
 
     private string GetClientIp()
     {
@@ -30,40 +32,27 @@ public class ChatController : ControllerBase
         }
     }
 
-    private const int MaxMessageLength = 500;
-
-    public ChatController(Api.Services.IChatService chatService, ILogger<ChatController> logger, Api.Services.ILastActivityTracker activityTracker)
+    public ChatController(IChatService chatService, ChatMessageValidator validator, ILogger<ChatController> logger, ILastActivityTracker activityTracker)
     {
         _chatService = chatService;
+        _validator = validator;
         _logger = logger;
         _activityTracker = activityTracker;
     }
 
     [HttpPost("chat")]
-    public async Task<IActionResult> Post([FromBody] ChatRequest req)
+    public async Task<IActionResult> Post([FromBody] ChatRequest req, CancellationToken ct)
     {
-        var messageText = req?.Message;
-        if (string.IsNullOrWhiteSpace(messageText))
+        var validation = ValidateMessage(req?.Message);
+        if (!validation.IsValid)
         {
-            _logger.LogWarning("Rejected chat request: missing or empty message");
-            return BadRequest(new { error = "message required" });
+            return BadRequest(new { error = validation.Error });
         }
 
-        if (messageText.Length > MaxMessageLength)
-        {
-            _logger.LogWarning("Rejected chat request: message too long ({Length} chars)", messageText.Length);
-            return BadRequest(new { error = $"message must be {MaxMessageLength} characters or fewer" });
-        }
-
-        if (InputSanitizer.ContainsInjection(messageText))
-        {
-            _logger.LogWarning("Rejected chat request: prompt injection detected");
-            return BadRequest(new { error = "Your message contains disallowed content." });
-        }
-
+        var messageText = validation.Message!;
         _activityTracker?.Touch();
         var sw = Stopwatch.StartNew();
-        var finalAnswer = await _chatService.GenerateAnswerAsync(messageText!);
+        var finalAnswer = await _chatService.GenerateAnswerAsync(messageText, ct);
         var clientIp = GetClientIp();
         _logger.LogInformation("Chat Q={Question} A={Answer} Duration={Duration}ms Source={Source}",
             messageText, finalAnswer, sw.ElapsedMilliseconds, clientIp);
@@ -73,43 +62,45 @@ public class ChatController : ControllerBase
     [HttpPost("chat/stream")]
     public async Task Stream([FromBody] ChatRequest req)
     {
-        var messageText = req?.Message;
-        if (string.IsNullOrWhiteSpace(messageText))
+        var cancellationToken = HttpContext.RequestAborted;
+        var validation = ValidateMessage(req?.Message);
+        if (!validation.IsValid)
         {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
-            await Response.WriteAsync("{\"error\":\"message required\"}");
+            await WriteValidationErrorAsync(validation.Error!, cancellationToken);
             return;
         }
 
-        if (messageText.Length > MaxMessageLength)
-        {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
-            await Response.WriteAsync($"{{\"error\":\"message must be {MaxMessageLength} characters or fewer\"}}");
-            return;
-        }
-
-        if (InputSanitizer.ContainsInjection(messageText))
-        {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
-            await Response.WriteAsync("{\"error\":\"Your message contains disallowed content.\"}");
-            return;
-        }
-
+        var messageText = validation.Message!;
         _activityTracker?.Touch();
         Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";
 
         var sw = Stopwatch.StartNew();
-        await foreach (var token in _chatService.StreamAnswerAsync(messageText!, HttpContext.RequestAborted))
+        await foreach (var token in _chatService.StreamAnswerAsync(messageText, cancellationToken))
         {
-            await Response.WriteAsync($"data: {token}\n\n", HttpContext.RequestAborted);
-            await Response.Body.FlushAsync(HttpContext.RequestAborted);
+            await Response.WriteAsync($"data: {token}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
         }
 
         var clientIp = GetClientIp();
         _logger.LogInformation("Stream Q={Question} Duration={Duration}ms Source={Source}", messageText, sw.ElapsedMilliseconds, clientIp);
-        await Response.WriteAsync("data: [DONE]\n\n", HttpContext.RequestAborted);
-        await Response.Body.FlushAsync(HttpContext.RequestAborted);
+        await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+        await Response.Body.FlushAsync(cancellationToken);
+    }
+
+    private ChatMessageValidationResult ValidateMessage(string? message)
+    {
+        var validation = _validator.Validate(message);
+        if (!validation.IsValid)
+            _logger.LogWarning("Rejected chat request: {Reason}", validation.Error);
+
+        return validation;
+    }
+
+    private async Task WriteValidationErrorAsync(string error, CancellationToken cancellationToken)
+    {
+        Response.StatusCode = StatusCodes.Status400BadRequest;
+        await Response.WriteAsJsonAsync(new { error }, cancellationToken: cancellationToken);
     }
 }

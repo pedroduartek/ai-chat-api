@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Api.Services;
+namespace Api.Security;
 
 /// <summary>
 /// Detects and neutralises known prompt-injection patterns in user messages
@@ -31,7 +31,7 @@ public static partial class InputSanitizer
     /// Returns <c>true</c> when the message contains patterns commonly used
     /// in prompt-injection attacks.
     /// </summary>
-    public static bool ContainsInjection(string message)
+    public static bool ContainsInjection(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))
             return false;
@@ -52,10 +52,10 @@ public static partial class InputSanitizer
     /// Callers should still check <see cref="ContainsInjection"/> first and may choose to
     /// reject the request outright instead of sanitising.
     /// </summary>
-    public static string Sanitize(string message)
+    public static string Sanitize(string? message)
     {
         if (string.IsNullOrWhiteSpace(message))
-            return message;
+            return string.Empty;
 
         try
         {

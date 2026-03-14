@@ -1,5 +1,5 @@
 using Api.Models;
-using Api.Services;
+using Api.Services.Email;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 

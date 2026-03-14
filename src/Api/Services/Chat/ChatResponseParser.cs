@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
-namespace Api.Services;
+namespace Api.Services.Chat;
 
 public sealed partial class ChatResponseParser : IChatResponseParser
 {

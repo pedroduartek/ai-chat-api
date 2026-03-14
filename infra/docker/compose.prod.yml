@@ -20,6 +20,7 @@ services:
       - Email__SmtpPort=${Email__SmtpPort:-587}
       - Email__Username=${Email__Username:-apikey}
       - Email__From=${Email__From:-no-reply@example.com}
+      - Email__Recipient=${Email__Recipient:-pedroduartek@gmail.com}
       - Email__UseSsl=${Email__UseSsl:-true}
       - Email__TimeoutSeconds=${Email__TimeoutSeconds:-30}
     networks:

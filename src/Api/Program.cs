@@ -5,10 +5,14 @@ using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
-using Api.Services;
 using Api.Application;
 using Api.Infrastructure;
+using Api.Options;
+using Api.Services.Chat;
+using Api.Services.Email;
+using Api.Services.Warmup;
 using System.Threading;
 
 using Serilog;
@@ -95,20 +99,38 @@ builder.Services.AddCors(options =>
 });
 var config = builder.Configuration;
 var chatSection = config.GetSection("Chat");
-var chatOptsPre = chatSection.Get<ChatOptions>() ?? new ChatOptions();
-var clientName = config["Chat:ClientName"] ?? chatOptsPre.ClientName;
-var baseUrl = config["OLLAMA_BASE_URL"] ?? chatOptsPre.BaseUrl;
 
-builder.Services.Configure<ChatOptions>(options =>
+builder.Services
+    .AddOptions<ChatOptions>()
+    .Bind(chatSection)
+    .ValidateDataAnnotations()
+    .Validate(options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _), "Chat:BaseUrl must be an absolute URI.")
+    .ValidateOnStart();
+
+builder.Services.PostConfigure<ChatOptions>(options =>
 {
-    chatSection.Bind(options);
+    options.BaseUrl = config["OLLAMA_BASE_URL"] ?? options.BaseUrl;
+    options.Model = config["OLLAMA_MODEL"] ?? options.Model;
 });
+
+builder.Services
+    .AddOptions<EmailOptions>()
+    .Bind(config.GetSection("Email"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<WarmupOptions>()
+    .Bind(config.GetSection("Warmup"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 var processorCount = Environment.ProcessorCount;
 var maxConns = Math.Max(4, processorCount * 4);
-builder.Services.AddHttpClient(clientName, c =>
+builder.Services.AddHttpClient<IChatCompletionClient, OllamaHttpClient>((serviceProvider, client) =>
 {
-    c.BaseAddress = new Uri(baseUrl);
+    var options = serviceProvider.GetRequiredService<IOptions<ChatOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
 })
 .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
@@ -126,16 +148,14 @@ ThreadPool.SetMinThreads(desiredWorker, compMin);
 builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 1_048_576);
 
 builder.Services.AddSingleton<IKnowledgeBaseRepository, FileKnowledgeBaseRepository>();
-builder.Services.AddScoped<IOllamaClient, OllamaHttpClient>();
+builder.Services.AddSingleton<ChatMessageValidator>();
 builder.Services.AddSingleton<IChatResponseParser, ChatResponseParser>();
+builder.Services.AddScoped<IChatRequestFactory, ChatRequestFactory>();
 builder.Services.AddScoped<IChatService, ChatService>();
-var emailSection = builder.Configuration.GetSection("Email");
-builder.Services.Configure<Api.Services.EmailOptions>(emailSection);
-builder.Services.AddScoped<Api.Services.IEmailService, Api.Services.SmtpEmailService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 // Keep-alive / warming services
-builder.Services.AddSingleton<Api.Services.ILastActivityTracker, Api.Services.LastActivityTracker>();
-builder.Services.Configure<Api.Services.WarmupOptions>(builder.Configuration.GetSection("Warmup"));
-builder.Services.AddHostedService<Api.Services.LlmKeepWarmService>();
+builder.Services.AddSingleton<ILastActivityTracker, LastActivityTracker>();
+builder.Services.AddHostedService<LlmKeepWarmService>();
 
 var app = builder.Build();
 

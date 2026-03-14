@@ -1,29 +1,22 @@
 # AI Chat API
 
-Self-hostable ASP.NET Core API for Pedro Duarte's website. The application exposes chat, health, and contact-email endpoints, augments chat prompts with a local knowledge base, and ships with Docker-based dev and production deployment files.
+Backend service for pedroduartek.com. This is a self-hosted ASP.NET Core API
+that handles website chat, streaming chat responses, contact-email delivery,
+and readiness checks. Chat responses are grounded with a local knowledge base
+and served through an Ollama-backed model.
 
-## Features
-
-- `POST /chat` for synchronous chat responses
-- `POST /chat/stream` for streaming chat responses
-- `POST /email` for contact-email delivery through SMTP
-- `GET /health` for readiness checks
-- Local knowledge base support via `src/Api/Resources/website_kb.txt`
-- Docker Compose manifests for development and production
-
-## Tech stack
+## Stack
 
 - .NET 10 / ASP.NET Core
-- MailKit for SMTP delivery
-- Serilog for structured logging
-- Polly for outbound HTTP retry policy
-- Docker and Caddy for containerized deployment
+- Ollama with `llama3.2:1b` by default
+- MailKit
+- Serilog
+- Polly
+- Docker Compose + Caddy
 
-## Quick start
+## Local development
 
-Prerequisites: .NET 10 SDK and optionally Docker.
-
-Run locally:
+Prerequisites: .NET 10 SDK. Docker is optional for local containers and Ollama.
 
 ```bash
 dotnet build ai-chat-api.sln
@@ -36,28 +29,29 @@ Run with Docker Compose:
 docker compose -f infra/docker/compose.dev.yml up --build
 ```
 
-Run tests:
-
-```bash
-dotnet test tests/Api.Tests/Api.Tests.csproj
-```
-
-## Project structure
+## Repository layout
 
 ```text
 ai-chat-api/
 ├── src/Api/
-│   ├── Application/     # contracts and typed LLM request models
+│   ├── Application/     # contracts and typed request models
 │   ├── Controllers/     # HTTP endpoints
-│   ├── Infrastructure/  # external adapters (HTTP, file system)
-│   ├── Options/         # typed configuration objects
+│   ├── Infrastructure/  # external adapters
+│   ├── Options/         # typed configuration
+│   ├── Resources/       # website knowledge base
 │   ├── Security/        # request guardrails
-│   ├── Services/        # chat, email, and warmup workflows
-│   └── Resources/       # local knowledge base content
+│   └── Services/        # chat, email, and warmup workflows
 ├── tests/Api.Tests/     # xUnit test suite
-└── infra/docker/        # compose and reverse-proxy config
+└── infra/docker/        # compose and Caddy config
+```
+
+## Quality gates
+
+```bash
+dotnet test tests/Api.Tests/Api.Tests.csproj
+dotnet build ai-chat-api.sln
 ```
 
 ## License
 
-Proprietary. All rights reserved. See [LICENSE](C:/Users/pduarte/repos/Project%202026/ai-chat-api/LICENSE).
+Proprietary. All rights reserved. See [LICENSE](LICENSE).

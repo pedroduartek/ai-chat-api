@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
@@ -35,14 +36,21 @@ public class SmtpEmailService : IEmailService
         if (string.IsNullOrEmpty(_options.Recipient)) throw new InvalidOperationException("Recipient address not configured");
         if (string.IsNullOrEmpty(_password)) throw new InvalidOperationException("SMTP key (SMTP_KEY) not set in configuration");
 
+        var normalizedName = request.Name!.Trim();
+        var normalizedEmail = request.Email!.Trim();
+        var normalizedSubject = request.Subject!.Trim();
+        var normalizedMessage = request.Message!.Trim();
+        var normalizedSource = string.IsNullOrWhiteSpace(request.Source) ? "contact form" : request.Source.Trim();
+
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(_options.From));
         message.To.Add(MailboxAddress.Parse(_options.Recipient));
+        message.ReplyTo.Add(new MailboxAddress(normalizedName, normalizedEmail));
 
-        message.Subject = request.Subject ?? string.Empty;
+        message.Subject = normalizedSubject;
         var builder = new BodyBuilder();
-        if (request.IsHtml) builder.HtmlBody = request.Body;
-        else builder.TextBody = request.Body;
+        builder.TextBody = BuildPlainTextBody(normalizedName, normalizedEmail, normalizedSubject, normalizedMessage, normalizedSource);
+        builder.HtmlBody = BuildHtmlBody(normalizedName, normalizedEmail, normalizedSubject, normalizedMessage, normalizedSource);
         message.Body = builder.ToMessageBody();
 
         using var client = new SmtpClient();
@@ -54,9 +62,9 @@ public class SmtpEmailService : IEmailService
             ["SmtpPort"] = _options.SmtpPort,
             ["From"] = _options.From,
             ["Recipient"] = _options.Recipient,
-            ["SubjectLength"] = request.Subject?.Length ?? 0,
-            ["BodyLength"] = request.Body?.Length ?? 0,
-            ["IsHtml"] = request.IsHtml
+            ["SubjectLength"] = normalizedSubject.Length,
+            ["BodyLength"] = normalizedMessage.Length,
+            ["Source"] = normalizedSource
         });
         try
         {
@@ -93,5 +101,38 @@ public class SmtpEmailService : IEmailService
             }
             throw;
         }
+    }
+
+    private static string BuildPlainTextBody(string name, string email, string subject, string message, string source)
+    {
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"New message from pedroduartek.com {source}",
+            string.Empty,
+            $"Name: {name}",
+            $"Email: {email}",
+            $"Subject: {subject}",
+            string.Empty,
+            "Message:",
+            message
+        });
+    }
+
+    private static string BuildHtmlBody(string name, string email, string subject, string message, string source)
+    {
+        var encodedName = WebUtility.HtmlEncode(name);
+        var encodedEmail = WebUtility.HtmlEncode(email);
+        var encodedSubject = WebUtility.HtmlEncode(subject);
+        var encodedMessage = WebUtility.HtmlEncode(message).Replace("\n", "<br/>", StringComparison.Ordinal);
+        var encodedSource = WebUtility.HtmlEncode(source);
+
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"<p>New message from pedroduartek.com {encodedSource}</p>",
+            $"<p><strong>Name:</strong> {encodedName}<br/><strong>Email:</strong> {encodedEmail}</p>",
+            $"<p><strong>Subject:</strong> {encodedSubject}</p>",
+            "<p><strong>Message:</strong></p>",
+            $"<p>{encodedMessage}</p>"
+        });
     }
 }

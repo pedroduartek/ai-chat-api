@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using Api.Models;
+using Api.Security;
 using Api.Services.Chat;
 using Api.Services.Warmup;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -41,6 +43,8 @@ public class ChatController : ControllerBase
         _activityTracker = activityTracker;
     }
 
+    [EnableRateLimiting(RateLimitPolicyNames.Chat)]
+    [RequestSizeLimit(8 * 1024)]
     [HttpPost("chat")]
     public async Task<IActionResult> Post([FromBody] ChatRequest req, CancellationToken ct)
     {
@@ -72,6 +76,8 @@ public class ChatController : ControllerBase
         return new JsonResult(new { answer = finalAnswer });
     }
 
+    [EnableRateLimiting(RateLimitPolicyNames.ChatStream)]
+    [RequestSizeLimit(8 * 1024)]
     [HttpPost("chat/stream")]
     public async Task Stream([FromBody] ChatRequest req)
     {

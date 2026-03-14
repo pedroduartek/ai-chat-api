@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Api.Models;
+using Api.Security;
 using Api.Services.Email;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -19,14 +21,24 @@ public class EmailController : ControllerBase
         _logger = logger;
     }
 
+    [EnableRateLimiting(RateLimitPolicyNames.Email)]
+    [RequestSizeLimit(16 * 1024)]
     [HttpPost("email")]
     public async Task<IActionResult> Post([FromBody] EmailRequest req, CancellationToken ct)
     {
+        if (req is null)
+        {
+            _logger.LogWarning("Email request missing body");
+            return BadRequest(new { error = "request body required" });
+        }
+
         using var scope = _logger.BeginScope(new Dictionary<string, object?>
         {
+            ["SenderNameLength"] = req.Name?.Length ?? 0,
+            ["ReplyToLength"] = req.Email?.Length ?? 0,
             ["SubjectLength"] = req.Subject?.Length ?? 0,
-            ["BodyLength"] = req.Body?.Length ?? 0,
-            ["IsHtml"] = req.IsHtml
+            ["BodyLength"] = req.Message?.Length ?? 0,
+            ["Source"] = req.Source ?? string.Empty
         });
 
         if (!ModelState.IsValid)

@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Primitives;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Api.Application;
 using Api.Infrastructure;
 using Api.Options;
+using Api.Security;
 using Api.Services.Chat;
 using Api.Services.Email;
 using Api.Services.Warmup;
@@ -66,37 +68,66 @@ builder.Services.AddControllers();
 builder.Services.AddRateLimiter(options =>
 {
     var rlSection = builder.Configuration.GetSection("RateLimiting");
-    var tokens = rlSection.GetValue<int?>("TokensPerPeriod") ?? 100;
-    var periodSeconds = rlSection.GetValue<int?>("ReplenishmentPeriodSeconds") ?? 60;
+    var globalTokens = rlSection.GetValue<int?>("TokensPerPeriod") ?? 60;
+    var globalPeriodSeconds = rlSection.GetValue<int?>("ReplenishmentPeriodSeconds") ?? 60;
+
+    var chatSection = rlSection.GetSection("Chat");
+    var chatTokens = chatSection.GetValue<int?>("TokensPerPeriod") ?? 12;
+    var chatPeriodSeconds = chatSection.GetValue<int?>("ReplenishmentPeriodSeconds") ?? 60;
+
+    var chatStreamSection = rlSection.GetSection("ChatStream");
+    var chatStreamPermitLimit = chatStreamSection.GetValue<int?>("PermitLimit") ?? 4;
+    var chatStreamWindowSeconds = chatStreamSection.GetValue<int?>("WindowSeconds") ?? 60;
+
+    var emailSection = rlSection.GetSection("Email");
+    var emailPermitLimit = emailSection.GetValue<int?>("PermitLimit") ?? 3;
+    var emailWindowSeconds = emailSection.GetValue<int?>("WindowSeconds") ?? 3600;
+
+    var healthSection = rlSection.GetSection("Health");
+    var healthPermitLimit = healthSection.GetValue<int?>("PermitLimit") ?? 30;
+    var healthWindowSeconds = healthSection.GetValue<int?>("WindowSeconds") ?? 60;
 
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
-        var req = httpContext.Request;
-        var clientId = GetClientIdentifier(req);
-        return RateLimitPartition.GetTokenBucketLimiter(clientId, _ => new TokenBucketRateLimiterOptions
-        {
-            TokenLimit = tokens,
-            TokensPerPeriod = tokens,
-            ReplenishmentPeriod = TimeSpan.FromSeconds(periodSeconds),
-            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-            QueueLimit = 0
-        });
+        return CreateTokenBucketPartition(httpContext, globalTokens, globalPeriodSeconds);
     });
+
+    options.AddPolicy(RateLimitPolicyNames.Chat, httpContext =>
+        CreateTokenBucketPartition(httpContext, chatTokens, chatPeriodSeconds));
+
+    options.AddPolicy(RateLimitPolicyNames.ChatStream, httpContext =>
+        CreateFixedWindowPartition(httpContext, chatStreamPermitLimit, chatStreamWindowSeconds));
+
+    options.AddPolicy(RateLimitPolicyNames.Email, httpContext =>
+        CreateFixedWindowPartition(httpContext, emailPermitLimit, emailWindowSeconds));
+
+    options.AddPolicy(RateLimitPolicyNames.Health, httpContext =>
+        CreateFixedWindowPartition(httpContext, healthPermitLimit, healthWindowSeconds));
 
     options.OnRejected = async (context, ct) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+        }
+
         var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Api.RateLimiting");
         using (logger.BeginScope(new Dictionary<string, object?>
         {
-            ["ClientId"] = GetClientIdentifier(context.HttpContext.Request),
+            ["ClientIp"] = GetClientIp(context.HttpContext.Request),
             ["RequestPath"] = context.HttpContext.Request.Path.Value ?? string.Empty,
             ["RequestMethod"] = context.HttpContext.Request.Method
         }))
         {
             logger.LogWarning("Request rejected by rate limiter");
         }
-        await context.HttpContext.Response.WriteAsync("Too many requests", ct);
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "Too many requests. Please slow down and try again later." },
+            cancellationToken: ct);
     };
 });
 
@@ -243,12 +274,35 @@ app.UseExceptionHandler(errorApp =>
 
 app.MapControllers();
 
-static string GetClientIdentifier(HttpRequest request)
+static RateLimitPartition<string> CreateTokenBucketPartition(HttpContext httpContext, int tokenLimit, int periodSeconds)
 {
-    if (request.Headers.TryGetValue("x-api-key", out var apiKey) && !StringValues.IsNullOrEmpty(apiKey))
-        return $"apiKey:{apiKey.ToString()}";
+    if (HttpMethods.IsOptions(httpContext.Request.Method))
+        return RateLimitPartition.GetNoLimiter("cors-preflight");
 
-    return GetClientIp(request);
+    return RateLimitPartition.GetTokenBucketLimiter(GetClientIp(httpContext.Request), _ => new TokenBucketRateLimiterOptions
+    {
+        TokenLimit = tokenLimit,
+        TokensPerPeriod = tokenLimit,
+        ReplenishmentPeriod = TimeSpan.FromSeconds(periodSeconds),
+        AutoReplenishment = true,
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        QueueLimit = 0
+    });
+}
+
+static RateLimitPartition<string> CreateFixedWindowPartition(HttpContext httpContext, int permitLimit, int windowSeconds)
+{
+    if (HttpMethods.IsOptions(httpContext.Request.Method))
+        return RateLimitPartition.GetNoLimiter("cors-preflight");
+
+    return RateLimitPartition.GetFixedWindowLimiter(GetClientIp(httpContext.Request), _ => new FixedWindowRateLimiterOptions
+    {
+        PermitLimit = permitLimit,
+        Window = TimeSpan.FromSeconds(windowSeconds),
+        AutoReplenishment = true,
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        QueueLimit = 0
+    });
 }
 
 static string GetClientIp(HttpRequest request)

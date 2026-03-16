@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Globalization;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -65,6 +66,14 @@ builder.Host.UseSerilog();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // Trust the reverse proxy for the public request scheme so logs reflect HTTPS.
+    // Client IP continues to come from CF-Connecting-IP / direct connection only.
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -214,6 +223,8 @@ builder.Services.AddHostedService<LlmKeepWarmService>();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 // Swagger exposure is configuration-driven so production can opt in without code changes.
 if (swaggerEnabled)
 {
@@ -283,6 +294,16 @@ app.UseExceptionHandler(errorApp =>
 });
 
 // Tell crawlers not to index the API host.
+app.MapGet("/", () =>
+{
+    if (swaggerEnabled)
+        return Results.Ok(new { service = "ai-chat-api", status = "ok", health = "/health", docs = "/swagger" });
+
+    return Results.Ok(new { service = "ai-chat-api", status = "ok", health = "/health" });
+})
+    .ExcludeFromDescription();
+
+// Tell crawlers not to index the API host.
 app.MapGet("/robots.txt", () => Results.Text("User-agent: *\nDisallow: /\n", "text/plain"))
     .ExcludeFromDescription();
 
@@ -334,3 +355,5 @@ static string GetClientIp(HttpRequest request)
 }
 
 app.Run();
+
+public partial class Program;

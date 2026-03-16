@@ -52,6 +52,14 @@ dotnet test tests/Api.Tests/Api.Tests.csproj
 dotnet build ai-chat-api.sln
 ```
 
+## Key endpoints
+
+- `GET /` returns basic service metadata for the API host.
+- `GET /health` returns a simple readiness response.
+- `POST /chat` returns a single chat completion.
+- `POST /chat/stream` streams chat completion tokens.
+- `POST /email` sends the contact email payload.
+
 ## License
 
 Proprietary. All rights reserved. See [LICENSE](LICENSE).

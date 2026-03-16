@@ -282,6 +282,10 @@ app.UseExceptionHandler(errorApp =>
     });
 });
 
+// Tell crawlers not to index the API host.
+app.MapGet("/robots.txt", () => Results.Text("User-agent: *\nDisallow: /\n", "text/plain"))
+    .ExcludeFromDescription();
+
 app.MapControllers();
 
 static RateLimitPartition<string> CreateTokenBucketPartition(HttpContext httpContext, int tokenLimit, int periodSeconds)

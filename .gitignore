@@ -8,3 +8,6 @@ node_modules/
 infra/docker/.env
 .env
 AGENTS.md
+
+# Build/publish output (not used by the Docker build)
+artifacts/

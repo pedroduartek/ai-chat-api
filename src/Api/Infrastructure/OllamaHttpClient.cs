@@ -73,6 +73,8 @@ public class OllamaHttpClient : IChatCompletionClient
         {
             Content = JsonContent.Create(request)
         };
+        // Opt this call out of the retry strategy (see ChatRequestKinds.IsStreaming).
+        httpRequest.Options.Set(ChatRequestKinds.IsStreaming, true);
 
         using var resp = await _client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!resp.IsSuccessStatusCode)

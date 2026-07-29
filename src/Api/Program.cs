@@ -25,7 +25,7 @@ using Serilog.Events;
 using Serilog.Formatting.Compact;
 using Serilog.Sinks.Grafana.Loki;
 using Polly;
-using Polly.Extensions.Http;
+using Microsoft.Extensions.Http.Resilience;
 
 var builder = WebApplication.CreateBuilder(args);
 var swaggerEnabled = builder.Configuration.GetValue("Swagger:Enabled", builder.Environment.IsDevelopment());
@@ -181,6 +181,14 @@ builder.Services
     .ValidateOnStart();
 
 builder.Services
+    .AddOptions<ResilienceOptions>()
+    .Bind(config.GetSection("Resilience"))
+    .ValidateDataAnnotations()
+    .Validate(options => options.AttemptTimeoutSeconds < options.TotalTimeoutSeconds,
+        "Resilience:AttemptTimeoutSeconds must be lower than Resilience:TotalTimeoutSeconds, otherwise a retry can never fit inside the budget.")
+    .ValidateOnStart();
+
+builder.Services
     .AddOptions<TurnstileOptions>()
     .Bind(config.GetSection("Turnstile"))
     .ValidateDataAnnotations()
@@ -199,10 +207,61 @@ builder.Services.AddHttpClient<IChatCompletionClient, OllamaHttpClient>((service
 {
     MaxConnectionsPerServer = maxConns
 })
-.AddPolicyHandler(HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .OrResult(msg => !msg.IsSuccessStatusCode)
-    .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))));
+// Resilience pipeline in front of the LLM. Outer to inner:
+// total timeout -> retry -> circuit breaker -> per-attempt timeout.
+// Only transient failures are retried (never a 4xx, which is deterministic, and
+// never a streaming request), so one visitor message cannot fan out into several
+// full generations on a single self-hosted model.
+.AddResilienceHandler("ollama", (pipeline, context) =>
+{
+    var resilience = context.ServiceProvider.GetRequiredService<IOptions<ResilienceOptions>>().Value;
+
+    pipeline.AddTimeout(new HttpTimeoutStrategyOptions
+    {
+        Name = "ollama-total",
+        Timeout = TimeSpan.FromSeconds(resilience.TotalTimeoutSeconds)
+    });
+
+    if (resilience.MaxRetryAttempts > 0)
+    {
+        pipeline.AddRetry(new HttpRetryStrategyOptions
+        {
+            Name = "ollama-retry",
+            MaxRetryAttempts = resilience.MaxRetryAttempts,
+            BackoffType = DelayBackoffType.Exponential,
+            Delay = TimeSpan.FromMilliseconds(resilience.RetryBaseDelayMilliseconds),
+            UseJitter = true,
+            ShouldHandle = args =>
+            {
+                // Streaming opts out entirely: replaying it re-runs the generation.
+                if (ChatRequestKinds.IsStreamingRequest(args.Outcome.Result?.RequestMessage
+                        ?? args.Context.GetRequestMessage()))
+                {
+                    return ValueTask.FromResult(false);
+                }
+
+                // Transient only: network faults, 5xx, 408 and 429. A 400/404 from
+                // Ollama (bad options, model not pulled) will never fix itself.
+                return ValueTask.FromResult(HttpClientResiliencePredicates.IsTransient(args.Outcome));
+            }
+        });
+    }
+
+    pipeline.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
+    {
+        Name = "ollama-breaker",
+        FailureRatio = resilience.CircuitBreakerFailureRatio,
+        SamplingDuration = TimeSpan.FromSeconds(resilience.CircuitBreakerSamplingSeconds),
+        MinimumThroughput = resilience.CircuitBreakerMinimumThroughput,
+        BreakDuration = TimeSpan.FromSeconds(resilience.CircuitBreakerDurationSeconds)
+    });
+
+    pipeline.AddTimeout(new HttpTimeoutStrategyOptions
+    {
+        Name = "ollama-attempt",
+        Timeout = TimeSpan.FromSeconds(resilience.AttemptTimeoutSeconds)
+    });
+});
 ThreadPool.GetMinThreads(out var workerMin, out var compMin);
 var desiredWorker = Math.Max(workerMin, processorCount * 2);
 ThreadPool.SetMinThreads(desiredWorker, compMin);
